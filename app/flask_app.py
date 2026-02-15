@@ -75,42 +75,12 @@ if STRIPE_SECRET_KEY:
 # === バックアップスケジューラー初期化 ===
 init_backup_scheduler(app)
 
-
-TTS_ENABLED = os.getenv('TTS_ENABLED', '1') == '1'
-CALORIE_ENABLED = os.getenv('CALORIE_ENABLED', '1') == '1'
-AUTH_ENABLED = os.getenv('AUTH_ENABLED', '0') == '1'  # デフォルトで認証はオフ
-STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
-STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
-STRIPE_PRICE_ID = os.getenv('STRIPE_PRICE_ID', '')
-APP_BASE_URL = os.getenv('APP_BASE_URL', 'http://127.0.0.1:5000')
-STRIPE_SUCCESS_URL = os.getenv('STRIPE_SUCCESS_URL', f'{APP_BASE_URL}/billing?success=1')
-STRIPE_CANCEL_URL = os.getenv('STRIPE_CANCEL_URL', f'{APP_BASE_URL}/billing?canceled=1')
-
-SMTP_HOST = os.getenv('SMTP_HOST', '')
-SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
-SMTP_USER = os.getenv('SMTP_USER', '')
-SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
-SMTP_FROM = os.getenv('SMTP_FROM', SMTP_USER)
-
 # ディレクトリ作成
 for folder in [UPLOAD_FOLDER, BACKUP_FOLDER]:
     try:
         os.makedirs(folder, exist_ok=True)
     except Exception as e:
         print(f"Warning: Could not create {folder}: {e}")
-
-# === Flask アプリケーション初期化 ===
-app = Flask(__name__, template_folder=TEMPLATE_FOLDER, static_folder=STATIC_FOLDER)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
-secret = os.getenv('APP_SECRET')
-if not secret:
-    print('Warning: APP_SECRET is not set. Set APP_SECRET for production use.')
-    secret = os.urandom(24)
-app.secret_key = secret
-
-if STRIPE_SECRET_KEY:
-    stripe.api_key = STRIPE_SECRET_KEY
 
 # === 課金判定 ===
 def _is_subscription_active(user):
