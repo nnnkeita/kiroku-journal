@@ -165,11 +165,6 @@ def finished_page():
         return render_template('index.html', finished_id=finished['id'], tts_enabled=TTS_ENABLED, calorie_enabled=CALORIE_ENABLED, current_user=session.get('username'))
     return render_template('index.html', tts_enabled=TTS_ENABLED, calorie_enabled=CALORIE_ENABLED, current_user=session.get('username'))
 
-@app.route('/chat')
-def chat_page():
-    """AIチャットページ"""
-    return render_template('chat.html', current_user=session.get('username'))
-
 @app.route('/uploads/<filename>')
 def download_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)

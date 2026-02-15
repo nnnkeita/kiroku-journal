@@ -1,6 +1,4 @@
 # データベースはGitに上げない
-notion.db
-notion.db-*
 *.backup
 
 # バックアップフォルダ（ローカルテスト用）
