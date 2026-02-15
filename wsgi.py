@@ -34,5 +34,11 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 
-# WSGI アプリケーション
+# WSGI アプリケーション - PythonAnywhere が呼び出す
 application = app
+
+# デバッグ用：アプリケーション初期化の確認
+if __name__ != "__main__":
+    import sys
+    print(f"[WSGI] Flask app initialized: {app}", file=sys.stderr, flush=True)
+    print(f"[WSGI] Config: DEBUG={app.debug}, TESTING={app.testing}", file=sys.stderr, flush=True)
