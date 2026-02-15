@@ -11,9 +11,12 @@ import sys
 import os
 
 # プロジェクトパスを Python パスに追加
+# 注意：sys.path は最後に追加して、標準ライブラリの優先度を保つ
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, PROJECT_ROOT)
-sys.path.insert(0, os.path.join(PROJECT_ROOT, 'app'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(1, PROJECT_ROOT)  # 0ではなく1に変更
+if os.path.join(PROJECT_ROOT, 'app') not in sys.path:
+    sys.path.insert(2, os.path.join(PROJECT_ROOT, 'app'))
 
 # .env ファイルの読み込み
 from dotenv import load_dotenv
