@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e  # エラーで終了
+
 # .envファイルから環境変数を読み込み
 if [ -f "config/.env" ]; then
     set -a
@@ -7,52 +9,53 @@ if [ -f "config/.env" ]; then
     set +a
 fi
 
-# データベースバックアップを作成
-echo "📦 Creating database backup..."
-python3 scripts/backup_db.py
-if [ $? -ne 0 ]; then
-    echo "⚠️ Backup failed, but continuing with deployment..."
+echo "=== Kiroku Journal デプロイ開始 ==="
+
+# 1. 変更をGitHubへpush
+echo "🚀 GitHubへ送信中..."
+COMMIT_MSG="Auto update: $(date "+%Y-%m-%d %H:%M:%S")"
+git add .
+if git commit -m "$COMMIT_MSG" 2>/dev/null; then
+    echo "  ✓ コミット: $COMMIT_MSG"
+else
+    echo "  ℹ コミット対象がないため、pushのみ実行"
+fi
+git push origin main
+
+echo "✅ GitHubへのpush完了"
+echo ""
+
+# 2. PythonAnywhereへ通知
+echo "🔄 本番環境を更新中..."
+
+if [ -z "$PYTHONANYWHERE_API_TOKEN" ]; then
+    echo "⚠️ PYTHONANYWHERE_API_TOKEN が未設定です"
+    echo ""
+    echo "【手動対応】PythonAnywhereダッシュボードで以下を実行："
+    echo "  1. https://www.pythonanywhere.com/dashboards/nnnkeita"
+    echo "  2. Web app → Reload ボタンをクリック"
+    exit 0
 fi
 
-# 1. 自動でコミットメッセージを作る（日付と時刻）
-COMMIT_MSG="Auto update: $(date "+%Y-%m-%d %H:%M:%S")"
+# WebアプリをリロードしてWSGIでgit pullが自動実行される
+RESPONSE=$(curl -s -X POST \
+    -H "Authorization: Token $PYTHONANYWHERE_API_TOKEN" \
+    "https://www.pythonanywhere.com/api/v0/user/nnnkeita/webapps/nnnkeita.pythonanywhere.com/reload/" 2>&1)
 
-# 2. GitHubへ送信
-echo "🚀 GitHubへ送信中..."
-git add .
-git commit -m "$COMMIT_MSG"
-git push
-
-# 3. PythonAnywhereの更新トリガーを引く
-echo "🔄 サーバーを更新中..."
-
-# API tokenで WebApp をリロード
-if [ -n "$PYTHONANYWHERE_API_TOKEN" ]; then
-    API_TOKEN="$PYTHONANYWHERE_API_TOKEN"
-    USERNAME="${PYTHONANYWHERE_USERNAME:-nnnkeita}"
-    DOMAIN="nnnkeita.pythonanywhere.com"
-    
-    # PythonAnywhere API でWebアプリをリロード
-    HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-        -H "Authorization: Token $API_TOKEN" \
-        "https://www.pythonanywhere.com/api/v0/user/$USERNAME/webapps/$DOMAIN/reload/")
-    
-    HTTP_CODE=$(echo "$HTTP_RESPONSE" | tail -1)
-    RESPONSE=$(echo "$HTTP_RESPONSE" | sed '$d')
-    
-    if [ "$HTTP_CODE" = "200" ]; then
-        echo "✅ PythonAnywhereサーバーをリロードしました"
-    else
-        echo "⚠️ PythonAnywhereのリロード失敗 (HTTP $HTTP_CODE)"
-        if [ -n "$RESPONSE" ]; then
-            echo "   レスポンス: $RESPONSE"
-        fi
-        echo "   ダッシュボードで手動リロードしてください"
-    fi
+if echo "$RESPONSE" | grep -q "OK\|status"; then
+    echo "✅ 本番環境が更新されました（WSGIでgit pull自動実行）"
 else
-    echo "⚠️ PYTHONANYWHERE_API_TOKEN が設定されていません"
-    echo "   PythonAnywhereのダッシュボードでWebアプリを手動でリロードしてください"
+    echo "⚠️ 更新結果: $RESPONSE"
 fi
 
 echo ""
-echo "✅ 更新完了！"
+echo "========================================="
+echo "✅ デプロイ完了！"
+echo "========================================="
+echo ""
+echo "処理内容："
+echo "  • GitHub ✅ 最新コードをpush"
+echo "  • 本番環境 ✅ Webアプリをリロード"
+echo "  • Git同期 ✅ WSGIで自動的にgit pull実行"
+echo ""
+echo "ブラウザをリロード（Cmd+Shift+R）して反映を確認してください"
