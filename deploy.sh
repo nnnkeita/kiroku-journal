@@ -33,19 +33,20 @@ if [ -n "$PYTHONANYWHERE_API_TOKEN" ]; then
     DOMAIN="nnnkeita.pythonanywhere.com"
     
     # PythonAnywhere API でWebアプリをリロード
-    RELOAD_OUTPUT=$(curl -s -X POST \
+    HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Authorization: Token $API_TOKEN" \
-        "https://www.pythonanywhere.com/api/v0/user/$USERNAME/webapps/$DOMAIN/reload/" \
-        -w "\n%{http_code}" 2>/dev/null)
+        "https://www.pythonanywhere.com/api/v0/user/$USERNAME/webapps/$DOMAIN/reload/")
     
-    HTTP_CODE=$(echo "$RELOAD_OUTPUT" | tail -n1)
-    RESPONSE=$(echo "$RELOAD_OUTPUT" | head -n-1)
+    HTTP_CODE=$(echo "$HTTP_RESPONSE" | tail -1)
+    RESPONSE=$(echo "$HTTP_RESPONSE" | sed '$d')
     
     if [ "$HTTP_CODE" = "200" ]; then
         echo "✅ PythonAnywhereサーバーをリロードしました"
     else
         echo "⚠️ PythonAnywhereのリロード失敗 (HTTP $HTTP_CODE)"
-        echo "   レスポンス: $RESPONSE"
+        if [ -n "$RESPONSE" ]; then
+            echo "   レスポンス: $RESPONSE"
+        fi
         echo "   ダッシュボードで手動リロードしてください"
     fi
 else
