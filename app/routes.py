@@ -18,12 +18,12 @@ import urllib.error
 import urllib.parse
 from werkzeug.utils import secure_filename
 
-from database import (
+from .database import (
     get_db, get_next_position, get_block_next_position,
     mark_tree_deleted, hard_delete_tree,
     save_healthplanet_token, get_healthplanet_token, clear_healthplanet_token
 )
-from utils import (
+from .utils import (
     allowed_file, estimate_calories, estimate_calories_items, export_page_to_dict,
     page_to_markdown, create_page_from_dict, copy_page_tree,
     backup_database_to_json, get_or_create_date_page

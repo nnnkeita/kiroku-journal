@@ -11,7 +11,7 @@ import os
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
-from database import get_db, get_next_position, get_block_next_position, mark_tree_deleted
+from .database import get_db, get_next_position, get_block_next_position, mark_tree_deleted
 
 # パス設定
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
