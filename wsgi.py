@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
+# WSGI VERSION: 2026-02-16 12:25:00 (Force reload on every deployment)
+# This timestamp ensures PythonAnywhere reloads the WSGI module on every Reload click
+
 import sys
 import os
 import subprocess
 import json
+import importlib
 import shutil
 from datetime import datetime
 
@@ -145,6 +149,13 @@ def perform_git_sync():
 # Reload時にgit syncを実行（毎回チェック）
 if os.path.exists(PROJECT_ROOT + '/.git'):
     import sys
+    from datetime import datetime
+    
+    # 起動マーカー出力（確実に新しいコードが実行されているか確認）
+    startup_time = datetime.now().isoformat()
+    print(f"[WSGI] 🚀 WSGI STARTUP @ {startup_time}", file=sys.stderr, flush=True)
+    sys.stderr.flush()
+    
     print("[WSGI] 🔄 Git sync check starting...", file=sys.stderr, flush=True)
     sys.stderr.flush()
     

@@ -63,6 +63,9 @@ SMTP_FROM = os.getenv('SMTP_FROM', SMTP_USER)
 
 # === Flask アプリケーション初期化 ===
 app = Flask(__name__, template_folder=TEMPLATE_FOLDER, static_folder=STATIC_FOLDER)
+print(f"[Flask] 🚀 FLASK STARTUP @ {datetime.now().isoformat()}", file=sys.stderr, flush=True)
+sys.stderr.flush()
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 secret = os.getenv('APP_SECRET')
