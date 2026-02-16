@@ -140,6 +140,9 @@ if os.path.exists(PROJECT_ROOT + '/.git'):
 
 # ============================================================
 
+# PROJECT_ROOT を sys.path に追加（app パッケージを import できるように）
+sys.path.insert(0, PROJECT_ROOT)
+
 # Virtualenv の site-packages を sys.path に追加
 venv_site_packages = '/home/nnnkeita/.virtualenvs/kiroku-journal/lib/python3.11/site-packages'
 if os.path.exists(venv_site_packages):
