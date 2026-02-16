@@ -86,7 +86,9 @@ def get_app_version():
         return 'unknown'
 
 APP_VERSION = get_app_version()
-print(f"[Flask] App version: {APP_VERSION}", flush=True)
+import sys
+print(f"[Flask] 📦 App version: {APP_VERSION}", file=sys.stderr, flush=True)
+sys.stderr.flush()
 
 # テンプレート関数を登録（テンプレートから呼び出せるように）
 @app.context_processor

@@ -122,21 +122,28 @@ def perform_git_sync():
 
 # Reload時にgit syncを実行（毎回チェック）
 if os.path.exists(PROJECT_ROOT + '/.git'):
-    print("[WSGI] 🔄 Starting git sync check...", file=sys.stderr, flush=True)
+    import sys
+    print("[WSGI] 🔄 Git sync check starting...", file=sys.stderr, flush=True)
+    sys.stderr.flush()
+    
     current_hash = get_current_git_hash()
     last_hash = get_last_sync_hash()
     
     # Reloadされた場合は強制的に同期
     print(f"[WSGI] Current: {current_hash[:8] if current_hash else 'unknown'}, Last: {last_hash[:8] if last_hash else 'none'}", file=sys.stderr, flush=True)
+    sys.stderr.flush()
     
     if perform_git_sync():
         if current_hash:
             save_sync_hash(current_hash)
-        print("[WSGI] ✅ Git sync completed", file=sys.stderr, flush=True)
+        print("[WSGI] ✅ Git sync completed successfully", file=sys.stderr, flush=True)
     else:
         print("[WSGI] ⚠️ Git sync skipped or failed", file=sys.stderr, flush=True)
+    sys.stderr.flush()
 else:
+    import sys
     print("[WSGI] ℹ️ Not a git repository, skipping sync", file=sys.stderr, flush=True)
+    sys.stderr.flush()
 
 # ============================================================
 

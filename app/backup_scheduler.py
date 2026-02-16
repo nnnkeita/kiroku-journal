@@ -130,7 +130,7 @@ class BackupScheduler:
             self.running = True
             self.thread = threading.Thread(target=self._background_backup_loop, daemon=True)
             self.thread.start()
-            print(f"✅ Background backup scheduler started (interval: {self.interval_seconds}s)")
+            # ログは出力しない（重複出力を避けるため）
     
     def _background_backup_loop(self):
         """バックアップ実行ループ"""
@@ -146,7 +146,7 @@ class BackupScheduler:
         self.running = False
         if self.thread:
             self.thread.join(timeout=5)
-        print("✅ Background backup scheduler stopped")
+        # ログは出力しない（シャットダウン時のノイズを避けるため）
 
 
 # グローバルバックアップスケジューラーインスタンス
