@@ -27,8 +27,21 @@ git push origin main
 
 echo "✅ GitHub へのpush完了"
 echo ""
+
+# 3. PythonAnywhere へ SSH で自動更新
+echo "🔄 本番環境を更新中..."
+
+ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no nnnkeita@bash.pythonanywhere.com << 'EOF' 2>/dev/null
+cd /home/nnnkeita/kiroku-journal
+git pull origin main >/dev/null 2>&1
+cp wsgi.py /var/www/nnnkeita_pythonanywhere_com_wsgi.py
+touch /var/www/nnnkeita_pythonanywhere_com_wsgi.py
+echo "✅ PythonAnywhere を更新しました"
+EOF
+
+echo ""
 echo "✅ デプロイ完了！"
-echo "💡  変更は自動的により反映されます（git sync機能）"
+echo "💡  リロード不要 - 自動で反映されます"
 
 echo ""
 echo "========================================="
