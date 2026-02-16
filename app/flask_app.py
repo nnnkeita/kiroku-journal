@@ -11,6 +11,7 @@
 """
 from flask import Flask, render_template, send_from_directory, request, redirect, session, url_for, jsonify
 import os
+import sys
 import secrets
 import smtplib
 from email.message import EmailMessage
@@ -86,7 +87,6 @@ def get_app_version():
         return 'unknown'
 
 APP_VERSION = get_app_version()
-import sys
 print(f"[Flask] 📦 App version: {APP_VERSION}", file=sys.stderr, flush=True)
 sys.stderr.flush()
 

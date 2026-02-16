@@ -10,6 +10,18 @@ from datetime import datetime
 PROJECT_ROOT = '/home/nnnkeita/kiroku-journal'
 SYNC_STATUS_FILE = os.path.join(PROJECT_ROOT, '.wsgi_sync_status')
 LAST_SYNC_FILE = os.path.join(PROJECT_ROOT, '.wsgi_last_sync_hash')
+STARTUP_MARKER_FILE = os.path.join(PROJECT_ROOT, '.wsgi_startup_marker')
+
+def create_startup_marker():
+    """起動マーカーをファイルに記録（デバッグ用）"""
+    try:
+        with open(STARTUP_MARKER_FILE, 'w') as f:
+            f.write(json.dumps({
+                'timestamp': datetime.now().isoformat(),
+                'marker': 'WSGI_STARTUP_NEW'
+            }))
+    except:
+        pass
 
 def log_sync_status(status, message):
     """同期状態をファイルに記録"""
@@ -58,12 +70,22 @@ def save_sync_hash(git_hash):
 def clear_python_cache():
     """Pythonのバイトコンパイル済みファイルをクリア"""
     try:
+        import glob
+        
         # app フォルダ配下の __pycache__ をクリア
         for root, dirs, files in os.walk(os.path.join(PROJECT_ROOT, 'app')):
             if '__pycache__' in dirs:
                 cache_path = os.path.join(root, '__pycache__')
-                print(f"[WSGI] 🗑 Removing cache: {cache_path}", file=sys.stderr, flush=True)
                 shutil.rmtree(cache_path, ignore_errors=True)
+        
+        # .pyc ファイルも明示的に削除
+        for pyc_file in glob.glob(os.path.join(PROJECT_ROOT, 'app', '**', '*.pyc'), recursive=True):
+            try:
+                os.remove(pyc_file)
+            except:
+                pass
+                
+        print(f"[WSGI] 🗑 Cache cleared successfully", file=sys.stderr, flush=True)
     except Exception as e:
         print(f"[WSGI] ⚠️ Cache clear error: {e}", file=sys.stderr, flush=True)
 
@@ -139,6 +161,11 @@ if os.path.exists(PROJECT_ROOT + '/.git'):
         print("[WSGI] ✅ Git sync completed successfully", file=sys.stderr, flush=True)
     else:
         print("[WSGI] ⚠️ Git sync skipped or failed", file=sys.stderr, flush=True)
+    sys.stderr.flush()
+    
+    # スタートアップマーカーを作成
+    create_startup_marker()
+    print("[WSGI] 📌 Startup marker created", file=sys.stderr, flush=True)
     sys.stderr.flush()
 else:
     import sys
