@@ -21,15 +21,15 @@ import subprocess
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
-from database import (
+from .database import (
     init_db, get_or_create_inbox, get_or_create_finished, get_user_count, get_user_by_username, create_user,
     get_user_by_id, update_user_password, set_password_reset_token, get_password_reset_token,
     mark_password_reset_token_used, update_user_stripe_customer, update_user_subscription,
     get_user_by_stripe_customer
 )
 
-from routes import register_routes
-from backup_scheduler import init_backup_scheduler
+from .routes import register_routes
+from .backup_scheduler import init_backup_scheduler
 
 # === パス設定 ===
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
