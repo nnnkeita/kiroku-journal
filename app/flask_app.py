@@ -16,6 +16,7 @@ import smtplib
 from email.message import EmailMessage
 from datetime import datetime, timedelta
 import stripe
+import subprocess
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
@@ -68,6 +69,29 @@ if not secret:
     print('Warning: APP_SECRET is not set. Set APP_SECRET for production use.')
     secret = os.urandom(24)
 app.secret_key = secret
+
+# === バージョン情報（ブラウザキャッシュバイパス用） ===
+def get_app_version():
+    """Gitハッシュをバージョンとして取得"""
+    try:
+        result = subprocess.run(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=PROJECT_ROOT
+        )
+        return result.stdout.strip() if result.returncode == 0 else 'unknown'
+    except:
+        return 'unknown'
+
+APP_VERSION = get_app_version()
+print(f"[Flask] App version: {APP_VERSION}", flush=True)
+
+# テンプレート関数を登録（テンプレートから呼び出せるように）
+@app.context_processor
+def inject_version():
+    return {'app_version': APP_VERSION}
 
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
