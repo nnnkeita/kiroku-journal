@@ -140,10 +140,10 @@ if os.path.exists(PROJECT_ROOT + '/.git'):
 
 # ============================================================
 
-# Virtualenv を正しく activate する
-activate_this = '/home/nnnkeita/.virtualenvs/kiroku-journal/bin/activate_this.py'
-if os.path.exists(activate_this):
-    exec(open(activate_this).read(), {'__file__': activate_this})
+# Virtualenv の site-packages を sys.path に追加
+venv_site_packages = '/home/nnnkeita/.virtualenvs/kiroku-journal/lib/python3.11/site-packages'
+if os.path.exists(venv_site_packages):
+    sys.path.insert(0, venv_site_packages)
 
 os.chdir(PROJECT_ROOT)
 
