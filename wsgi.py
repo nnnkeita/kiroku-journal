@@ -92,9 +92,28 @@ def clear_python_cache():
         pass
 
 def perform_git_sync():
-    """Git同期を実行"""
+    """Git同期を実行（データベースを保護）"""
     try:
-        # git fetch を実行してリモートの最新情報を取得
+        import tempfile
+        
+        # DB ファイルをバックアップ
+        db_path = os.path.join(PROJECT_ROOT, 'notion.db')
+        backups_path = os.path.join(PROJECT_ROOT, 'backups')
+        
+        db_backup = None
+        backups_backup = None
+        
+        if os.path.exists(db_path):
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.db') as tmp:
+                shutil.copy2(db_path, tmp.name)
+                db_backup = tmp.name
+        
+        if os.path.exists(backups_path):
+            with tempfile.TemporaryDirectory() as tmpdir:
+                backups_backup = os.path.join(tmpdir, 'backups')
+                shutil.copytree(backups_path, backups_backup)
+        
+        # git fetch を実行
         fetch_result = subprocess.run(
             ['git', '-C', PROJECT_ROOT, 'fetch', 'origin'],
             capture_output=True,
@@ -103,7 +122,7 @@ def perform_git_sync():
             cwd=PROJECT_ROOT
         )
         
-        # git reset --hard origin/main を実行（ローカル変更を無視して最新に）
+        # git reset --hard origin/main を実行
         reset_result = subprocess.run(
             ['git', '-C', PROJECT_ROOT, 'reset', '--hard', 'origin/main'],
             capture_output=True,
@@ -112,11 +131,17 @@ def perform_git_sync():
             cwd=PROJECT_ROOT
         )
         
+        success = False
         if reset_result.returncode == 0:
+            # DB ファイルを復元
+            if db_backup and os.path.exists(db_backup):
+                shutil.copy2(db_backup, db_path)
+                os.remove(db_backup)
+            
             clear_python_cache()
-            return True
-        else:
-            return False
+            success = True
+        
+        return success
             
     except subprocess.TimeoutExpired:
         return False
