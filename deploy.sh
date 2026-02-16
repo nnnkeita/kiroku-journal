@@ -28,12 +28,35 @@ git push origin main
 echo "✅ GitHub へのpush完了"
 echo ""
 
-# 3. PythonAnywhere へ自動更新（wsgi.py タイムスタンプでトリガー）
-echo "💡 本番環境は wsgi.py 更新時に自動同期されます"
+# 3. README を見てデプロイ完了
+cat > DEPLOY_INSTRUCTIONS.md << 'EOF'
+# PythonAnywhere デプロイ手順
 
+デプロイが完了しました。以下のいずれかの方法で反映してください：
+
+## 方法1: PythonAnywhere Webコンソール（自動方法は現在不可）
+1. https://www.pythonanywhere.com にアクセス
+2. "Web" > "nnnkeita.pythonanywhere.com" > "Reload"ボタンを押す
+
+## 方法2: SSH 手動実行（オプション）
+```bash
+ssh nnnkeita@bash.pythonanywhere.com
+cd /home/nnnkeita/kiroku-journal
+git pull origin main
+cp wsgi.py /var/www/nnnkeita_pythonanywhere_com_wsgi.py
+touch /var/www/nnnkeita_pythonanywhere_com_wsgi.py
+```
+EOF
+
+echo "💡 以下の2つの方法で本番環境に反映してください："
 echo ""
-echo "✅ デプロイ完了！"
-echo "💡  リロード不要 - 自動で反映されます"
+echo "【推奨】PythonAnywhere Web UI:"
+echo "  https://www.pythonanywhere.com"
+echo "  → Web → Reload ボタンをクリック"
+echo ""
+echo "【オプション】SSH コマンド:"
+echo "  DEPLOY_INSTRUCTIONS.md を参照"
+echo ""
 
 echo ""
 echo "========================================="

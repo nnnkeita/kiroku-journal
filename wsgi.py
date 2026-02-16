@@ -43,7 +43,7 @@ def get_current_git_hash():
     """現在のGitハッシュを取得"""
     try:
         result = subprocess.run(
-            ['git', '-C', PROJECT_ROOT, 'rev-parse', 'HEAD'],
+            ['/usr/bin/git', '-C', PROJECT_ROOT, 'rev-parse', 'HEAD'],
             capture_output=True,
             text=True,
             timeout=10,
@@ -93,6 +93,7 @@ def clear_python_cache():
 
 def perform_git_sync():
     """Git同期を実行（データベースを保護）"""
+    log_sync_status('starting', f'Git sync starting at {datetime.now()}')
     try:
         import tempfile
         
@@ -115,7 +116,7 @@ def perform_git_sync():
         
         # git fetch を実行
         fetch_result = subprocess.run(
-            ['git', '-C', PROJECT_ROOT, 'fetch', 'origin'],
+            ['/usr/bin/git', '-C', PROJECT_ROOT, 'fetch', 'origin'],
             capture_output=True,
             text=True,
             timeout=30,
@@ -124,7 +125,7 @@ def perform_git_sync():
         
         # git reset --hard origin/main を実行
         reset_result = subprocess.run(
-            ['git', '-C', PROJECT_ROOT, 'reset', '--hard', 'origin/main'],
+            ['/usr/bin/git', '-C', PROJECT_ROOT, 'reset', '--hard', 'origin/main'],
             capture_output=True,
             text=True,
             timeout=30,
@@ -154,8 +155,24 @@ if os.path.exists(PROJECT_ROOT + '/.git'):
     current_hash = get_current_git_hash()
     last_hash = get_last_sync_hash()
     
+    # デバッグログファイルを作成
+    debug_log = os.path.join(PROJECT_ROOT, '.wsgi_debug.log')
+    with open(debug_log, 'a') as f:
+        f.write(f"\n=== WSGI Reload: {datetime.now()} ===\n")
+        f.write(f"Current hash: {current_hash}\n")
+        f.write(f"Last hash: {last_hash}\n")
+        f.write(f"PROJECT_ROOT: {PROJECT_ROOT}\n")
+        f.write(f"GIT exists: {os.path.exists('/usr/bin/git')}\n")
+    
     # 強制的に同期を実行
-    perform_git_sync()
+    sync_success = perform_git_sync()
+    
+    new_hash = get_current_git_hash()
+    with open(debug_log, 'a') as f:
+        f.write(f"Sync result: {sync_success}\n")
+        f.write(f"New hash after sync: {new_hash}\n")
+        f.write(f"Templates dir exists: {os.path.exists(os.path.join(PROJECT_ROOT, 'templates'))}\n")
+        f.write(f"Index.html size: {os.path.getsize(os.path.join(PROJECT_ROOT, 'templates/index.html')) if os.path.exists(os.path.join(PROJECT_ROOT, 'templates/index.html')) else 'N/A'}\n")
     
     if current_hash:
         save_sync_hash(current_hash)
