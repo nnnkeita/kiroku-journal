@@ -140,14 +140,10 @@ if os.path.exists(PROJECT_ROOT + '/.git'):
 
 # ============================================================
 
-# PythonAnywhereの問題を回避：sys.pathをリセット
-import builtins
-_original_import = builtins.__import__
-
-# venvから標準ライブラリを使う
-venv_lib = '/home/nnnkeita/.virtualenvs/kiroku-journal/lib/python3.11'
-if os.path.exists(venv_lib):
-    sys.path = [venv_lib + '/site-packages', '/usr/lib/python3.11', '/usr/local/lib/python3.11']
+# Virtualenv を正しく activate する
+activate_this = '/home/nnnkeita/.virtualenvs/kiroku-journal/bin/activate_this.py'
+if os.path.exists(activate_this):
+    exec(open(activate_this).read(), {'__file__': activate_this})
 
 os.chdir(PROJECT_ROOT)
 
