@@ -28,23 +28,8 @@ git push origin main
 echo "✅ GitHub へのpush完了"
 echo ""
 
-# 3. PythonAnywhere へ SSH で自動更新（キーがある場合のみ）
-echo "🔄 本番環境を更新中..."
-
-if [ -f ~/.ssh/id_rsa ] || [ -f ~/.ssh/id_ed25519 ]; then
-    ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no nnnkeita@bash.pythonanywhere.com << 'EOF' 2>/dev/null
-cd /home/nnnkeita/kiroku-journal
-git pull origin main >/dev/null 2>&1
-cp wsgi.py /var/www/nnnkeita_pythonanywhere_com_wsgi.py
-touch /var/www/nnnkeita_pythonanywhere_com_wsgi.py
-EOF
-    if [ $? -eq 0 ]; then
-        echo "✅ PythonAnywhere を自動更新しました"
-    fi
-else
-    echo "💡 SSH キーがないため、スキップしました"
-    echo "   次回のアクセス時に自動同期されます"
-fi
+# 3. PythonAnywhere へ自動更新（wsgi.py タイムスタンプでトリガー）
+echo "💡 本番環境は wsgi.py 更新時に自動同期されます"
 
 echo ""
 echo "✅ デプロイ完了！"
