@@ -63,8 +63,6 @@ SMTP_FROM = os.getenv('SMTP_FROM', SMTP_USER)
 
 # === Flask アプリケーション初期化 ===
 app = Flask(__name__, template_folder=TEMPLATE_FOLDER, static_folder=STATIC_FOLDER)
-print(f"[Flask] 🚀 FLASK STARTUP @ {datetime.now().isoformat()}", file=sys.stderr, flush=True)
-sys.stderr.flush()
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
@@ -90,8 +88,6 @@ def get_app_version():
         return 'unknown'
 
 APP_VERSION = get_app_version()
-print(f"[Flask] 📦 App version: {APP_VERSION}", file=sys.stderr, flush=True)
-sys.stderr.flush()
 
 # テンプレート関数を登録（テンプレートから呼び出せるように）
 @app.context_processor
@@ -353,8 +349,6 @@ def stripe_webhook():
             event = request.get_json() or {}
     except stripe.error.SignatureVerificationError as e:
         # Signature verification failed - for development, log and try to parse anyway
-        import sys
-        print(f"[WEBHOOK] Signature verification failed (development): {e}", file=sys.stderr, flush=True)
         # In development mode, try to parse the payload anyway
         import json
         try:
@@ -362,16 +356,11 @@ def stripe_webhook():
         except:
             return jsonify({'error': 'Invalid JSON payload'}), 400
     except Exception as e:
-        import sys
-        print(f"[WEBHOOK] Unexpected error: {e}", file=sys.stderr, flush=True)
         return jsonify({'error': 'Webhook processing error'}), 400
 
     # Process the event
     event_type = event.get('type')
     data = event.get('data', {}).get('object', {})
-    
-    import sys
-    print(f"[WEBHOOK] Event type: {event_type}, customer: {data.get('customer', 'N/A')}", file=sys.stderr, flush=True)
 
     if event_type in ['checkout.session.completed']:
         customer_id = data.get('customer')

@@ -88,16 +88,12 @@ def clear_python_cache():
                 os.remove(pyc_file)
             except:
                 pass
-                
-        print(f"[WSGI] 🗑 Cache cleared successfully", file=sys.stderr, flush=True)
     except Exception as e:
-        print(f"[WSGI] ⚠️ Cache clear error: {e}", file=sys.stderr, flush=True)
+        pass
 
 def perform_git_sync():
     """Git同期を実行"""
     try:
-        print("[WSGI] 📥 Fetching latest code from GitHub...", file=sys.stderr, flush=True)
-        
         # git fetch を実行してリモートの最新情報を取得
         fetch_result = subprocess.run(
             ['git', '-C', PROJECT_ROOT, 'fetch', 'origin'],
@@ -106,9 +102,6 @@ def perform_git_sync():
             timeout=30,
             cwd=PROJECT_ROOT
         )
-        
-        if fetch_result.returncode != 0:
-            print(f"[WSGI] ⚠️ Git fetch failed: {fetch_result.stderr[:100]}", file=sys.stderr, flush=True)
         
         # git reset --hard origin/main を実行（ローカル変更を無視して最新に）
         reset_result = subprocess.run(
@@ -119,69 +112,31 @@ def perform_git_sync():
             cwd=PROJECT_ROOT
         )
         
-        output = reset_result.stdout + reset_result.stderr
-        
         if reset_result.returncode == 0:
-            msg = f"✅ Git sync success: Updated to latest main branch"
-            print(msg, file=sys.stderr, flush=True)
-            # キャッシュクリア
             clear_python_cache()
-            log_sync_status('success', output[:200])
             return True
         else:
-            msg = f"⚠️ Git reset failed (code {reset_result.returncode}): {output[:150]}"
-            print(msg, file=sys.stderr, flush=True)
-            log_sync_status('failed', output[:200])
             return False
             
     except subprocess.TimeoutExpired:
-        msg = "[WSGI] ⚠️ Git sync timeout"
-        print(msg, file=sys.stderr, flush=True)
-        log_sync_status('timeout', 'Git sync timed out')
         return False
         
     except Exception as e:
-        msg = f"[WSGI] ⚠️ Git sync error: {str(e)[:100]}"
-        print(msg, file=sys.stderr, flush=True)
-        log_sync_status('error', str(e)[:200])
         return False
 
 # Reload時にgit syncを実行（毎回チェック）
 if os.path.exists(PROJECT_ROOT + '/.git'):
-    import sys
-    from datetime import datetime
-    
-    # 起動マーカー出力（確実に新しいコードが実行されているか確認）
-    startup_time = datetime.now().isoformat()
-    print(f"[WSGI] 🚀 WSGI STARTUP @ {startup_time}", file=sys.stderr, flush=True)
-    sys.stderr.flush()
-    
-    print("[WSGI] 🔄 Git sync check starting...", file=sys.stderr, flush=True)
-    sys.stderr.flush()
-    
     current_hash = get_current_git_hash()
     last_hash = get_last_sync_hash()
     
-    # Reloadされた場合は強制的に同期
-    print(f"[WSGI] Current: {current_hash[:8] if current_hash else 'unknown'}, Last: {last_hash[:8] if last_hash else 'none'}", file=sys.stderr, flush=True)
-    sys.stderr.flush()
+    # 強制的に同期を実行
+    perform_git_sync()
     
-    if perform_git_sync():
-        if current_hash:
-            save_sync_hash(current_hash)
-        print("[WSGI] ✅ Git sync completed successfully", file=sys.stderr, flush=True)
-    else:
-        print("[WSGI] ⚠️ Git sync skipped or failed", file=sys.stderr, flush=True)
-    sys.stderr.flush()
+    if current_hash:
+        save_sync_hash(current_hash)
     
     # スタートアップマーカーを作成
     create_startup_marker()
-    print("[WSGI] 📌 Startup marker created", file=sys.stderr, flush=True)
-    sys.stderr.flush()
-else:
-    import sys
-    print("[WSGI] ℹ️ Not a git repository, skipping sync", file=sys.stderr, flush=True)
-    sys.stderr.flush()
 
 # ============================================================
 
@@ -207,10 +162,8 @@ try:
         init_db()
 
     application = app
-    print("[WSGI] ✅ Application loaded successfully", file=sys.stderr, flush=True)
     
 except Exception as e:
-    print(f"[WSGI] ❌ Application load error: {e}", file=sys.stderr, flush=True)
     raise
 
 
