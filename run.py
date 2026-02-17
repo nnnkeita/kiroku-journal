@@ -8,12 +8,12 @@ Kiroku Journal - エントリーポイント
 import sys
 import os
 
-# app フォルダをPythonパスに追加
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+# プロジェクトルートを Python パスに追加
+sys.path.insert(0, os.path.dirname(__file__))
 
 # Flask アプリを起動
 if __name__ == '__main__':
-    from flask_app import app
+    from app.flask_app import app
     
     HOST = '127.0.0.1'
     PORT = 5000
