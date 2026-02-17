@@ -25,7 +25,7 @@ from .database import (
     init_db, get_or_create_inbox, get_or_create_finished, get_user_count, get_user_by_username, create_user,
     get_user_by_id, update_user_password, set_password_reset_token, get_password_reset_token,
     mark_password_reset_token_used, update_user_stripe_customer, update_user_subscription,
-    get_user_by_stripe_customer, set_database_path
+    get_user_by_stripe_customer
 )
 
 from .routes import register_routes
@@ -39,18 +39,9 @@ STATIC_FOLDER = os.path.join(PROJECT_ROOT, 'static')
 UPLOAD_FOLDER = os.path.join(PROJECT_ROOT, 'uploads')
 BACKUP_FOLDER = os.path.join(PROJECT_ROOT, 'backups')
 
-# === 環境判定（ローカルとPythonAnywhereの分離） ===
-IS_PYTHONANYWHERE = 'PYTHONANYWHERE_DOMAIN' in os.environ
-IS_LOCAL = not IS_PYTHONANYWHERE
-
 # .envファイルを読み込み（PythonAnywhereの無料プラン対応）
 env_path = os.path.join(PROJECT_ROOT, 'config', '.env')
 load_dotenv(env_path)
-# === カスタムデータベースパス設定（オプション） ===
-# .env に DATABASE_PATH を設定すれば、そこを使用
-custom_db_path = os.getenv('DATABASE_PATH')
-if custom_db_path:
-    set_database_path(custom_db_path)
 
 # === 設定値の定義 ===
 TTS_ENABLED = os.getenv('TTS_ENABLED', '1') == '1'

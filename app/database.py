@@ -13,36 +13,7 @@ from typing import Optional
 # パス設定
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)  # kiroku-journal フォルダ
-
-# === 環境判定（ローカルとPythonAnywhereの分離） ===
-IS_PYTHONANYWHERE = 'PYTHONANYWHERE_DOMAIN' in os.environ
-IS_LOCAL = not IS_PYTHONANYWHERE
-
-# データベースパスを環境で分ける
-if IS_PYTHONANYWHERE:
-    # PythonAnywhere用：ホームディレクトリ配下に保存
-    HOME_DIR = os.path.expanduser('~')
-    DATABASE = os.path.join(HOME_DIR, 'kiroku_db', 'notion.db')
-else:
-    # ローカル開発用：プロジェクト内に保存
-    DATABASE = os.path.join(PROJECT_ROOT, 'notion.db')
-
-# PythonAnywhere用データベースディレクトリ作成
-if IS_PYTHONANYWHERE:
-    db_dir = os.path.dirname(DATABASE)
-    os.makedirs(db_dir, exist_ok=True)
-
-def set_database_path(new_path):
-    """※管理者用※ データベースパスを上書き（通常は使用しません）
-    
-    PythonAnywhere でカスタムパスを指定したい場合のみ使用
-    app.py的な起動スクリプトの app.app_context() 前に呼び出してください
-    """
-    global DATABASE
-    DATABASE = new_path
-    db_dir = os.path.dirname(DATABASE)
-    if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
+DATABASE = os.path.join(PROJECT_ROOT, 'notion.db')
 
 def get_db():
     """データベース接続を取得"""
