@@ -1280,6 +1280,38 @@ def register_routes(app):
         save_healthplanet_token(access_token, refresh_token, expires_at, scope)
         return 'HealthPlanetの連携が完了しました。'
 
+    @app.route('/api/healthplanet/status', methods=['GET'])
+    def healthplanet_status():
+        """Health Planet の連携状況を確認"""
+        token_row = get_healthplanet_token()
+        if not token_row:
+            return jsonify({'connected': False}), 200
+        
+        # トークンの有効期限を確認
+        expires_at = token_row['expires_at']
+        is_expired = False
+        if expires_at:
+            try:
+                if datetime.fromisoformat(expires_at) < datetime.utcnow():
+                    is_expired = True
+            except Exception:
+                pass
+        
+        return jsonify({
+            'connected': True,
+            'expires_at': expires_at,
+            'is_expired': is_expired
+        }), 200
+
+    @app.route('/api/healthplanet/disconnect', methods=['POST'])
+    def healthplanet_disconnect():
+        """Health Planet の連携を解除"""
+        try:
+            clear_healthplanet_token()
+            return jsonify({'message': '連携を解除しました'}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
     @app.route('/api/healthplanet/sync', methods=['GET', 'POST'])
     def healthplanet_sync():
         if request.method == 'POST':

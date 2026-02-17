@@ -374,6 +374,9 @@
             <button onclick="showExportImportMenu()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
                 <span class="mr-2">💾</span> インポート/エクスポート
             </button>
+            <button onclick="showHealthPlanetMenu()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
+                <span class="mr-2">⚖️</span> Health Planet
+            </button>
         </div>
     </div>
 
@@ -2974,6 +2977,125 @@
         }
         if (typeof window.updateSpeakRate !== 'function') {
             window.updateSpeakRate = function () {};
+        }
+        
+        // === Health Planet 連携機能 ===
+        function showHealthPlanetMenu() {
+            const modal = document.createElement('div');
+            modal.id = 'healthplanet-modal';
+            modal.className = 'fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center';
+            modal.onclick = (e) => {
+                if (e.target.id === 'healthplanet-modal') {
+                    modal.remove();
+                }
+            };
+            
+            modal.innerHTML = `
+                <div class="bg-white w-full max-w-md rounded-lg shadow-xl overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+                    <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-gray-800">⚖️ Health Planet</h2>
+                        <button onclick="document.getElementById('healthplanet-modal').remove()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                    </div>
+                    <div class="p-4 space-y-3">
+                        <div class="border-b pb-3">
+                            <h3 class="font-bold text-gray-700 mb-2">連携状況</h3>
+                            <div id="hp-status" class="text-sm text-gray-600">確認中...</div>
+                        </div>
+                        <div class="space-y-2">
+                            <button id="hp-connect-btn" onclick="connectHealthPlanet()" class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-semibold transition hidden">
+                                🔗 Health Planet を連携する
+                            </button>
+                            <button id="hp-disconnect-btn" onclick="disconnectHealthPlanet()" class="w-full px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded font-semibold transition hidden">
+                                🔌 連携を解除する
+                            </button>
+                            <button id="hp-sync-btn" onclick="syncHealthPlanetNow()" class="w-full px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded font-semibold transition hidden">
+                                💾 今日の記録を同期
+                            </button>
+                        </div>
+                        <div id="hp-sync-result" class="text-sm text-gray-600 p-2 bg-gray-50 rounded hidden"></div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            modal.classList.remove('hidden');
+            checkHealthPlanetStatus();
+        }
+        
+        async function checkHealthPlanetStatus() {
+            try {
+                const res = await fetch('/api/healthplanet/status');
+                const status = await res.json();
+                
+                const statusEl = document.getElementById('hp-status');
+                const connectBtn = document.getElementById('hp-connect-btn');
+                const disconnectBtn = document.getElementById('hp-disconnect-btn');
+                const syncBtn = document.getElementById('hp-sync-btn');
+                
+                if (status.connected) {
+                    statusEl.innerHTML = `✅ 連携済み<br><span class="text-xs text-gray-500">トークン: ${status.expires_at ? '有効' : '期限切れ'}</span>`;
+                    connectBtn.classList.add('hidden');
+                    disconnectBtn.classList.remove('hidden');
+                    syncBtn.classList.remove('hidden');
+                } else {
+                    statusEl.innerHTML = '❌ 未連携<br><span class="text-xs text-gray-500">Health Planet を連携してデータを同期します</span>';
+                    connectBtn.classList.remove('hidden');
+                    disconnectBtn.classList.add('hidden');
+                    syncBtn.classList.add('hidden');
+                }
+            } catch (e) {
+                document.getElementById('hp-status').innerHTML = '⚠️ 状態確認に失敗<br><span class="text-xs text-gray-500">画面をリロードしてください</span>';
+            }
+        }
+        
+        function connectHealthPlanet() {
+            // O AUTH 認可画面にリダイレクト
+            window.location.href = '/api/healthplanet/auth';
+        }
+        
+        async function disconnectHealthPlanet() {
+            if (confirm('Health Planet の連携を解除しますか？')) {
+                try {
+                    const res = await fetch('/api/healthplanet/disconnect', { method: 'POST' });
+                    if (res.ok) {
+                        alert('連携を解除しました');
+                        checkHealthPlanetStatus();
+                    } else {
+                        alert('解除に失敗しました');
+                    }
+                } catch (e) {
+                    alert('エラーが発生しました');
+                }
+            }
+        }
+        
+        async function syncHealthPlanetNow() {
+            const btn = document.getElementById('hp-sync-btn');
+            const resultEl = document.getElementById('hp-sync-result');
+            
+            btn.disabled = true;
+            btn.innerHTML = '同期中...';
+            resultEl.classList.remove('hidden');
+            resultEl.textContent = '同期中...';
+            
+            try {
+                const res = await fetch('/api/healthplanet/sync', { method: 'POST' });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    resultEl.textContent = '✅ ' + data.message;
+                    resultEl.className = 'text-sm text-green-600 p-2 bg-green-50 rounded';
+                } else {
+                    resultEl.textContent = '❌ ' + data.message;
+                    resultEl.className = 'text-sm text-red-600 p-2 bg-red-50 rounded';
+                }
+            } catch (e) {
+                resultEl.textContent = '❌ 同期に失敗しました: ' + e.message;
+                resultEl.className = 'text-sm text-red-600 p-2 bg-red-50 rounded';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '💾 今日の記録を同期';
+            }
         }
     </script>
     {% if tts_enabled %}
