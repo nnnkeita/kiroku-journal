@@ -1321,14 +1321,14 @@ def register_routes(app):
         """Health Planet から最新の体重データを取得"""
         token_row = get_healthplanet_token()
         if not token_row:
-            return jsonify({'error': 'HealthPlanetが未連携です'}), 400
+            return jsonify({'error': 'HealthPlanetが未連携です。先にフロー著してください'}), 400
         
         access_token = token_row['access_token']
         expires_at = token_row['expires_at']
         if expires_at:
             try:
                 if datetime.fromisoformat(expires_at) < datetime.utcnow():
-                    return jsonify({'error': 'トークン期限切れです'}), 400
+                    return jsonify({'error': 'トークン期限切れです。再度認可してください'}), 400
             except Exception:
                 pass
         
@@ -1339,20 +1339,35 @@ def register_routes(app):
         try:
             data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, ['6021'])
         except Exception as e:
-            return jsonify({'error': f'データ取得失敗: {str(e)}'}), 400
+            error_msg = str(e)
+            if 'Expecting value' in error_msg or 'JSON' in error_msg:
+                return jsonify({
+                    'error': 'Health Planet API からエラーが返されました。トークンが無効の可能性があります。再度認可をお試しください',
+                    'detail': error_msg
+                }), 400
+            return jsonify({'error': f'データ取得失敗: {error_msg}'}), 400
+        
+        if not isinstance(data, dict) or 'data' not in data:
+            return jsonify({
+                'error': 'Health Planet から無効なレスポンスが返されました',
+                'detail': str(data)[:200]
+            }), 400
         
         weight = None
         weight_date = None
-        for entry in data.get('data', []) if isinstance(data, dict) else []:
+        for entry in data.get('data', []):
             tag = str(entry.get('tag', ''))
-            keydata = str(entry.get('keydata', ''))
-            if tag == '6021':
-                weight = float(keydata)
-                weight_date = entry.get('date', '')
-                break
+            keydata = entry.get('keydata', '')
+            if tag == '6021' and keydata:
+                try:
+                    weight = float(keydata)
+                    weight_date = entry.get('date', '')
+                    break
+                except (ValueError, TypeError):
+                    continue
         
         if weight is None:
-            return jsonify({'error': 'データが見つかりません'}), 404
+            return jsonify({'error': 'この 30 日間に体重データが見つかりません。Health Planet デバイスで計測してください'}), 404
         
         return jsonify({
             'weight': weight,
@@ -1424,14 +1439,62 @@ def register_routes(app):
     def sync_weight_from_health_planet(page_id):
         """Health Planet から最新の体重をこのページに同期"""
         try:
-            # まず Health Planet から最新体重を取得
-            hp_response = healthplanet_latest_weight()
-            if hp_response[1] != 200:
-                hp_data = hp_response[0].get_json()
-                return jsonify({'error': hp_data.get('error', 'Failed to get weight')}), hp_response[1]
+            # 任意の日付か、今日のデータか
+            data = request.json or {}
+            target_date = data.get('date')  # YYYY-MM-DD 形式、省略時は今日
             
-            hp_data = hp_response[0].get_json()
-            weight = hp_data.get('weight')
+            if target_date:
+                # 指定日付のデータを取得
+                try:
+                    target_dt = datetime.strptime(target_date, '%Y-%m-%d')
+                except ValueError:
+                    return jsonify({'error': '日付形式が正しくありません（YYYY-MM-DD）'}), 400
+            else:
+                target_dt = datetime.utcnow() + timedelta(hours=9)
+                target_date = target_dt.strftime('%Y-%m-%d')
+            
+            # その日の開始〜終了時刻で検索
+            start_time = target_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = target_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            from_str = start_time.strftime('%Y%m%d%H%M%S')
+            to_str = end_time.strftime('%Y%m%d%H%M%S')
+            
+            token_row = get_healthplanet_token()
+            if not token_row:
+                return jsonify({'error': 'HealthPlanetが未連携です'}), 400
+            
+            access_token = token_row['access_token']
+            
+            try:
+                hp_data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, ['6021'])
+            except Exception as e:
+                error_msg = str(e)
+                if 'Expecting value' in error_msg or 'JSON' in error_msg:
+                    return jsonify({
+                        'error': 'Health Planet から有効なデータを取得できません',
+                        'detail': '再度認可をお試しください'
+                    }), 400
+                return jsonify({'error': f'取得失敗: {error_msg}'}), 400
+            
+            if not isinstance(hp_data, dict) or 'data' not in hp_data:
+                return jsonify({'error': '無効なレスポンス形式です'}), 400
+            
+            weight = None
+            for entry in hp_data.get('data', []):
+                tag = str(entry.get('tag', ''))
+                keydata = entry.get('keydata', '')
+                if tag == '6021' and keydata:
+                    try:
+                        weight = float(keydata)
+                        break
+                    except (ValueError, TypeError):
+                        continue
+            
+            if weight is None:
+                return jsonify({
+                    'error': f'{target_date} に体重データが見つかりません',
+                    'detail': 'この日付の計測記録がない可能性があります'
+                }), 404
             
             # ページに保存
             conn = get_db()
@@ -1452,7 +1515,59 @@ def register_routes(app):
                 'success': True,
                 'weight': row['weight'],
                 'weight_at': row['weight_at'],
-                'message': f'体重を同期しました: {weight}kg'
+                'date': target_date,
+                'message': f'{target_date} の {weight}kg を同期しました'
+            }), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/pages/<int:page_id>/get-weight-for-date', methods=['GET'])
+    def get_weight_for_date(page_id):
+        """指定日付の Health Planet データを取得（ページに保存せず）"""
+        try:
+            target_date = request.args.get('date')  # YYYY-MM-DD
+            if not target_date:
+                return jsonify({'error': '日付を指定してください'}), 400
+            
+            try:
+                target_dt = datetime.strptime(target_date, '%Y-%m-%d')
+            except ValueError:
+                return jsonify({'error': '日付形式が正しくありません'}), 400
+            
+            token_row = get_healthplanet_token()
+            if not token_row:
+                return jsonify({'error': 'HealthPlanetが未連携です'}), 400
+            
+            access_token = token_row['access_token']
+            
+            start_time = target_dt.replace(hour=0, minute=0, second=0)
+            end_time = target_dt.replace(hour=23, minute=59, second=59)
+            from_str = start_time.strftime('%Y%m%d%H%M%S')
+            to_str = end_time.strftime('%Y%m%d%H%M%S')
+            
+            try:
+                hp_data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, ['6021'])
+            except Exception as e:
+                return jsonify({'error': f'取得失敗: {str(e)}'}), 400
+            
+            if not isinstance(hp_data, dict):
+                return jsonify({'error': '無効なレスポンス'}), 400
+            
+            weight = None
+            for entry in hp_data.get('data', []):
+                tag = str(entry.get('tag', ''))
+                keydata = entry.get('keydata', '')
+                if tag == '6021' and keydata:
+                    try:
+                        weight = float(keydata)
+                        break
+                    except (ValueError, TypeError):
+                        continue
+            
+            return jsonify({
+                'date': target_date,
+                'weight': weight,
+                'found': weight is not None
             }), 200
         except Exception as e:
             return jsonify({'error': str(e)}), 500

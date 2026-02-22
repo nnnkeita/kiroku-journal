@@ -505,7 +505,22 @@
                     <div class="flex items-center gap-2 mb-3">
                         <span class="text-lg">⚖️</span>
                         <span class="text-sm font-semibold text-gray-700">体重記録</span>
+                        <button onclick="toggleWeightDatePicker()" class="ml-auto text-xs px-2 py-1 bg-blue-200 hover:bg-blue-300 rounded text-gray-700 transition">📅 別の日付</button>
                     </div>
+                    
+                    <!-- 日付選択パネル -->
+                    <div id="weight-date-picker-panel" class="hidden mb-3 p-3 bg-white rounded-lg border border-blue-200">
+                        <div class="flex gap-2 items-center mb-2">
+                            <label class="text-xs font-medium text-gray-600">データを紐づける日付:</label>
+                            <input type="date" id="weight-date-picker" class="px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-blue-400">
+                        </div>
+                        <div id="weight-history-status" class="text-xs text-gray-600 mb-2"></div>
+                        <div class="flex gap-2">
+                            <button onclick="applyWeightDate()" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition">適用</button>
+                            <button onclick="toggleWeightDatePicker()" class="px-3 py-1 bg-gray-300 hover:bg-gray-400 text-gray-700 text-xs rounded transition">キャンセル</button>
+                        </div>
+                    </div>
+                    
                     <div class="flex items-center gap-3">
                         <div class="flex items-center gap-2">
                             <input type="number" id="weight-input" step="0.1" min="0" max="999" placeholder="体重 (kg)" 
@@ -3224,6 +3239,7 @@
                 const currentPageId = window.currentPageId;
                 const btn = document.getElementById('weight-sync-btn');
                 const weightInput = document.getElementById('weight-input');
+                const pickerPanel = document.getElementById('weight-date-picker-panel');
                 
                 if (!currentPageId || !btn || !weightInput) return;
                 
@@ -3231,17 +3247,25 @@
                 btn.innerHTML = '取得中...';
                 showWeightStatus('取得中...', 'info');
                 
+                // 日付が指定されているか確認
+                const datePicker = document.getElementById('weight-date-picker');
+                const targetDate = datePicker && datePicker.value ? datePicker.value : null;
+                
                 const res = await fetch(`/api/pages/${currentPageId}/sync-weight-from-health-planet`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: targetDate })
                 });
                 
                 if (res.ok) {
                     const data = await res.json();
                     weightInput.value = data.weight;
-                    showWeightStatus(`✅ ${data.weight}kg を同期しました`, 'success');
+                    showWeightStatus(`✅ ${data.message}`, 'success');
+                    if (pickerPanel) pickerPanel.classList.add('hidden');
                 } else {
                     const data = await res.json();
-                    showWeightStatus(`❌ ${data.error || '取得失敗'}`, 'error');
+                    const errorMsg = data.detail || data.error || '取得失敗';
+                    showWeightStatus(`❌ ${errorMsg}`, 'error');
                 }
             } catch (e) {
                 console.error('Error syncing weight from Health Planet:', e);
@@ -3252,6 +3276,72 @@
                     btn.disabled = false;
                     btn.innerHTML = '🔗 Health Planet から取得';
                 }
+            }
+        }
+        
+        function toggleWeightDatePicker() {
+            const panel = document.getElementById('weight-date-picker-panel');
+            const picker = document.getElementById('weight-date-picker');
+            
+            if (!panel || !picker) return;
+            
+            const isHidden = panel.classList.contains('hidden');
+            if (isHidden) {
+                panel.classList.remove('hidden');
+                // 今日の日付をデフォルトに
+                const today = new Date();
+                const yyyy = today.getFullYear();
+                const mm = String(today.getMonth() + 1).padStart(2, '0');
+                const dd = String(today.getDate()).padStart(2, '0');
+                picker.value = `${yyyy}-${mm}-${dd}`;
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+        
+        async function applyWeightDate() {
+            try {
+                const picker = document.getElementById('weight-date-picker');
+                const statusEl = document.getElementById('weight-history-status');
+                
+                if (!picker || !statusEl) return;
+                
+                const selectedDate = picker.value;
+                if (!selectedDate) {
+                    statusEl.textContent = '日付を選択してください';
+                    return;
+                }
+                
+                statusEl.textContent = '確認中...';
+                
+                // 指定日付のデータが存在するか確認
+                const currentPageId = window.currentPageId;
+                const res = await fetch(`/api/pages/${currentPageId}/get-weight-for-date?date=${selectedDate}`);
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.weight) {
+                        statusEl.innerHTML = `💡 ${selectedDate} のデータ: <strong>${data.weight}kg</strong> を見つけました`;
+                        statusEl.className = 'text-xs text-green-600';
+                    } else {
+                        statusEl.textContent = `⚠️ ${selectedDate} にデータが見つかりません`;
+                        statusEl.className = 'text-xs text-orange-600';
+                    }
+                } else {
+                    const data = await res.json();
+                    statusEl.textContent = `❌ ${data.error}`;
+                    statusEl.className = 'text-xs text-red-600';
+                }
+                
+                // 「取得」ボタンをクリックして同期
+                setTimeout(() => {
+                    const syncBtn = document.getElementById('weight-sync-btn');
+                    if (syncBtn) syncBtn.click();
+                }, 300);
+            } catch (e) {
+                console.error('Error applying date:', e);
+                const statusEl = document.getElementById('weight-history-status');
+                if (statusEl) statusEl.textContent = '❌ エラーが発生しました';
             }
         }
         
