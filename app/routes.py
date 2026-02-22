@@ -38,11 +38,6 @@ BACKUP_FOLDER = os.path.join(PROJECT_ROOT, 'backups')
 
 
 def register_routes(app):
-    # HealthPlanet同期テストページ
-    @app.route('/healthplanet_sync_test')
-    def healthplanet_sync_test():
-        from flask import render_template
-        return render_template('healthplanet_sync.html')
     """全APIルートをアプリに登録"""
 
     def _get_healthplanet_config():
