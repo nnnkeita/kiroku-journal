@@ -1686,6 +1686,7 @@
 
         async function loadPage(id) {
             currentPageId = id;
+            window.currentPageId = id;
             closeSidebar(); // モバイルではサイドバーを閉じる
             
             // ローディング表示
@@ -1762,7 +1763,6 @@
             updateHealthplanetWeightDisplay(page.blocks || [], Boolean(dateMatch));
             
             // 体重トラッカーの初期化（日付ページのみ）
-            window.currentPageId = id;
             initWeightTracker();
             
             // カテゴリーページ（筋トレ、英語学習、食事）の場合はタブを表示
@@ -3150,44 +3150,57 @@
         
         // === 体重トラッカー機能 ===
         function initWeightTracker() {
-            const currentPageId = window.currentPageId;
-            if (!currentPageId) return;
-            
-            const tracker = document.getElementById('weight-tracker');
-            if (!tracker) return;
-            
-            // 日付ページかどうかチェック（YYYY-MM-DD 形式）
-            const pageTitle = document.getElementById('page-title').value;
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(pageTitle)) {
-                tracker.classList.add('hidden');
-                return;
+            try {
+                const currentPageId = window.currentPageId;
+                if (!currentPageId) return;
+                
+                const tracker = document.getElementById('weight-tracker');
+                if (!tracker) return;
+                
+                // 日付ページかどうかチェック（YYYY-MM-DD 形式）
+                const pageTitleEl = document.getElementById('page-title');
+                if (!pageTitleEl) return;
+                
+                const pageTitle = pageTitleEl.value;
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(pageTitle)) {
+                    tracker.classList.add('hidden');
+                    return;
+                }
+                
+                tracker.classList.remove('hidden');
+                
+                // ページから体重データを読み込む
+                fetch(`/api/pages/${currentPageId}/weight`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.weight) {
+                            const inputEl = document.getElementById('weight-input');
+                            if (inputEl) {
+                                inputEl.value = data.weight;
+                            }
+                        }
+                    })
+                    .catch(e => console.log('Weight not loaded:', e));
+            } catch (e) {
+                console.error('Error initializing weight tracker:', e);
             }
-            
-            tracker.classList.remove('hidden');
-            
-            // ページから体重データを読み込む
-            fetch(`/api/pages/${currentPageId}/weight`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.weight) {
-                        document.getElementById('weight-input').value = data.weight;
-                    }
-                })
-                .catch(e => console.log('Weight not loaded:', e));
         }
         
         async function saveWeight() {
-            const currentPageId = window.currentPageId;
-            const weightInput = document.getElementById('weight-input');
-            const weight = parseFloat(weightInput.value);
-            const statusEl = document.getElementById('weight-status');
-            
-            if (isNaN(weight) || weight <= 0) {
-                showWeightStatus('❌ 有効な数値を入力してください', 'error');
-                return;
-            }
-            
             try {
+                const currentPageId = window.currentPageId;
+                const weightInput = document.getElementById('weight-input');
+                const statusEl = document.getElementById('weight-status');
+                
+                if (!currentPageId || !weightInput || !statusEl) return;
+                
+                const weight = parseFloat(weightInput.value);
+                
+                if (isNaN(weight) || weight <= 0) {
+                    showWeightStatus('❌ 有効な数値を入力してください', 'error');
+                    return;
+                }
+                
                 const res = await fetch(`/api/pages/${currentPageId}/weight`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -3201,20 +3214,23 @@
                     showWeightStatus('❌ 保存に失敗しました', 'error');
                 }
             } catch (e) {
+                console.error('Error saving weight:', e);
                 showWeightStatus('❌ エラーが発生しました', 'error');
             }
         }
         
         async function syncWeightFromHealthPlanet() {
-            const currentPageId = window.currentPageId;
-            const btn = document.getElementById('weight-sync-btn');
-            const weightInput = document.getElementById('weight-input');
-            
-            btn.disabled = true;
-            btn.innerHTML = '取得中...';
-            showWeightStatus('取得中...', 'info');
-            
             try {
+                const currentPageId = window.currentPageId;
+                const btn = document.getElementById('weight-sync-btn');
+                const weightInput = document.getElementById('weight-input');
+                
+                if (!currentPageId || !btn || !weightInput) return;
+                
+                btn.disabled = true;
+                btn.innerHTML = '取得中...';
+                showWeightStatus('取得中...', 'info');
+                
                 const res = await fetch(`/api/pages/${currentPageId}/sync-weight-from-health-planet`, {
                     method: 'POST'
                 });
@@ -3228,10 +3244,14 @@
                     showWeightStatus(`❌ ${data.error || '取得失敗'}`, 'error');
                 }
             } catch (e) {
+                console.error('Error syncing weight from Health Planet:', e);
                 showWeightStatus('❌ Health Planet から取得できません', 'error');
             } finally {
-                btn.disabled = false;
-                btn.innerHTML = '🔗 Health Planet から取得';
+                const btn = document.getElementById('weight-sync-btn');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '🔗 Health Planet から取得';
+                }
             }
         }
         
