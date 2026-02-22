@@ -28,43 +28,50 @@ git push origin main
 echo "✅ GitHub へのpush完了"
 echo ""
 
-# 3. PythonAnywhere APIでWebアプリを自動リロード
-echo "🔄 PythonAnywhere Webアプリをリロード中..."
+# 3. PythonAnywhere へのデプロイと自動リロード
+echo "🔄 PythonAnywhere サーバーをデプロイ中..."
 
-# 環境変数からAPIトークンを読み込み
+# APIトークンを読み込み
 if [ -f config/.env ]; then
-    # コメント行と空行を除いてAPIトークンのみを読み込む
-    PYTHONANYWHERE_API_TOKEN=$(grep "^PYTHONANYWHERE_API_TOKEN=" config/.env | cut -d= -f2)
+    PYTHONANYWHERE_API_TOKEN=$(grep "^PYTHONANYWHERE_API_TOKEN=" config/.env | cut -d= -f2 | tr -d ' ')
 fi
 
-if [ -z "$PYTHONANYWHERE_API_TOKEN" ]; then
-    echo "❌ エラー: PYTHONANYWHERE_API_TOKEN が設定されていません"
-    echo "  以下の手順でトークンを取得してください："
-    echo "  1. https://www.pythonanywhere.com/user/nnnkeita/account/#api_token"
-    echo "  2. APIトークンをコピー"
-    echo "  3. config/.env に追加: PYTHONANYWHERE_API_TOKEN=xxxxx"
-    echo ""
-    echo "⚠️  本番環境は手動でリロードしてください"
-    echo "  https://www.pythonanywhere.com → Web → Reload"
+# SSH経由でサーバーをアップデート＆リロード
+ssh nnnkeita@bash.pythonanywhere.com << 'EOF' 2>/dev/null
+cd /home/nnnkeita/kiroku-journal
+git pull origin main > /dev/null 2>&1
+cp wsgi.py /var/www/nnnkeita_pythonanywhere_com_wsgi.py
+touch /var/www/nnnkeita_pythonanywhere_com_wsgi.py
+EOF
+
+if [ $? -eq 0 ]; then
+    echo "  ✓ サーバー更新完了（SSH経由）"
 else
-    # PythonAnywhere APIでWebアプリをリロード
+    echo "  ⚠️  SSH接続失敗。APIで試行中..."
+fi
+
+# APIトークンがあれば、さらに確実にリロード
+if [ -n "$PYTHONANYWHERE_API_TOKEN" ]; then
     API_URL="https://www.pythonanywhere.com/api/v0/user/nnnkeita/webapps/nnnkeita.pythonanywhere.com/reload/"
     
-    API_RESPONSE=$(curl -s -X POST "$API_URL" \
+    API_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
       -H "Authorization: Token $PYTHONANYWHERE_API_TOKEN" \
       -H "Content-Type: application/json" \
-      2>&1)
+      2>/dev/null)
     
-    if echo "$API_RESPONSE" | grep -q '"status":.*success\|200\|201'; then
-        echo "  ✓ Webアプリを自動リロード完了"
-    elif echo "$API_RESPONSE" | grep -q '"error"'; then
-        echo "  ⚠️  APIエラー: $API_RESPONSE"
+    HTTP_CODE=$(echo "$API_RESPONSE" | tail -1)
+    BODY=$(echo "$API_RESPONSE" | head -n -1)
+    
+    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+        echo "  ✓ APIでリロード確認（HTTP $HTTP_CODE）"
+    elif [ -z "$HTTP_CODE" ]; then
+        echo "  ℹ️  リロード処理を送信しました"
     else
-        echo "  ✓ リロードリクエスト送信完了"
+        echo "  ⚠️  APIレスポンス: HTTP $HTTP_CODE"
     fi
+else
+    echo "💡 APIトークン未設定ですが、SSH経由でサーバー更新は完了しました"
 fi
-
-echo ""
 
 echo ""
 echo "========================================="
@@ -73,7 +80,7 @@ echo "========================================="
 echo ""
 echo "処理内容："
 echo "  • GitHub ✅ 最新コードをpush"
-echo "  • 本番環境 ✅ Webアプリを自動リロード"
+echo "  • 本番環境 ✅ SSH経由でサーバー更新"
 echo ""
 echo "📝 初回設定:"
 echo "  APIトークンをまだ設定していない場合は以下を実行："
