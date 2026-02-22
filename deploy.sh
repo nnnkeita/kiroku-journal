@@ -28,34 +28,41 @@ git push origin main
 echo "✅ GitHub へのpush完了"
 echo ""
 
-# 3. README を見てデプロイ完了
-cat > DEPLOY_INSTRUCTIONS.md << 'EOF'
-# PythonAnywhere デプロイ手順
+# 3. PythonAnywhere APIでWebアプリを自動リロード
+echo "🔄 PythonAnywhere Webアプリをリロード中..."
 
-デプロイが完了しました。以下のいずれかの方法で反映してください：
+# 環境変数からAPIトークンを読み込み
+if [ -f config/.env ]; then
+    export $(cat config/.env | xargs)
+fi
 
-## 方法1: PythonAnywhere Webコンソール（自動方法は現在不可）
-1. https://www.pythonanywhere.com にアクセス
-2. "Web" > "nnnkeita.pythonanywhere.com" > "Reload"ボタンを押す
+if [ -z "$PYTHONANYWHERE_API_TOKEN" ]; then
+    echo "❌ エラー: PYTHONANYWHERE_API_TOKEN が設定されていません"
+    echo "  以下の手順でトークンを取得してください："
+    echo "  1. https://www.pythonanywhere.com/user/nnnkeita/account/#api_token"
+    echo "  2. APIトークンをコピー"
+    echo "  3. config/.env に追加: PYTHONANYWHERE_API_TOKEN=xxxxx"
+    echo ""
+    echo "⚠️  本番環境は手動でリロードしてください"
+    echo "  https://www.pythonanywhere.com → Web → Reload"
+else
+    # PythonAnywhere APIでWebアプリをリロード
+    API_URL="https://www.pythonanywhere.com/api/v0/user/nnnkeita/webapps/nnnkeita.pythonanywhere.com/reload/"
+    
+    API_RESPONSE=$(curl -s -X POST "$API_URL" \
+      -H "Authorization: Token $PYTHONANYWHERE_API_TOKEN" \
+      -H "Content-Type: application/json" \
+      2>&1)
+    
+    if echo "$API_RESPONSE" | grep -q '"status":.*success\|200\|201'; then
+        echo "  ✓ Webアプリを自動リロード完了"
+    elif echo "$API_RESPONSE" | grep -q '"error"'; then
+        echo "  ⚠️  APIエラー: $API_RESPONSE"
+    else
+        echo "  ✓ リロードリクエスト送信完了"
+    fi
+fi
 
-## 方法2: SSH 手動実行（オプション）
-```bash
-ssh nnnkeita@bash.pythonanywhere.com
-cd /home/nnnkeita/kiroku-journal
-git pull origin main
-cp wsgi.py /var/www/nnnkeita_pythonanywhere_com_wsgi.py
-touch /var/www/nnnkeita_pythonanywhere_com_wsgi.py
-```
-EOF
-
-echo "💡 以下の2つの方法で本番環境に反映してください："
-echo ""
-echo "【推奨】PythonAnywhere Web UI:"
-echo "  https://www.pythonanywhere.com"
-echo "  → Web → Reload ボタンをクリック"
-echo ""
-echo "【オプション】SSH コマンド:"
-echo "  DEPLOY_INSTRUCTIONS.md を参照"
 echo ""
 
 echo ""
@@ -65,7 +72,14 @@ echo "========================================="
 echo ""
 echo "処理内容："
 echo "  • GitHub ✅ 最新コードをpush"
-echo "  • 本番環境 ✅ Webアプリをリロード"
-echo "  • Git同期 ✅ WSGIで自動的にgit pull実行"
+echo "  • 本番環境 ✅ Webアプリを自動リロード"
+echo ""
+echo "📝 初回設定:"
+echo "  APIトークンをまだ設定していない場合は以下を実行："
+echo "  1. https://www.pythonanywhere.com/user/nnnkeita/account/#api_token"
+echo "  2. APIトークンをコピー"
+echo "  3. echo 'PYTHONANYWHERE_API_TOKEN=YOUR_TOKEN_HERE' >> config/.env"
+echo ""
+echo "その後、デプロイスクリプトを再度実行すると完全自動化されます"
 echo ""
 echo "ブラウザをリロード（Cmd+Shift+R）して反映を確認してください"

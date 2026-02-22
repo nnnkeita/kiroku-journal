@@ -96,8 +96,32 @@
         }
         .knowledge-title {
             font-size: 16px;
-            font-weight: 600;
+            font-weight: 700;
             color: #0f172a;
+        }
+        
+        /* モバイル最適化 */
+        @media (max-width: 640px) {
+            body {
+                font-size: 14px;
+                line-height: 1.6;
+            }
+            h1 {
+                font-weight: 700;
+            }
+            h2 {
+                font-weight: 700;
+            }
+            .text-sm {
+                font-size: 12px;
+            }
+            .text-xs {
+                font-size: 11px;
+            }
+            /* ナビゲーション調整 */
+            .h-10 {
+                font-size: 13px;
+            }
         }
         .knowledge-meta {
             font-size: 12px;
@@ -325,7 +349,7 @@
         }
     </style>
 </head>
-<body style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); font-family: 'BIZ UDPゴシック', sans-serif; font-weight: 700;" class="text-gray-700" onclick="hideContextMenu()">  
+<body style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); font-family: 'BIZ UDPゴシック', sans-serif;" class="text-gray-700" onclick="hideContextMenu()">  
 
     <div class="w-72 bg-gray-50 border-r border-gray-200 flex flex-col h-full flex-shrink-0" id="sidebar">
         <div class="p-4 flex justify-between items-center">
