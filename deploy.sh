@@ -33,7 +33,8 @@ echo "🔄 PythonAnywhere Webアプリをリロード中..."
 
 # 環境変数からAPIトークンを読み込み
 if [ -f config/.env ]; then
-    export $(cat config/.env | xargs)
+    # コメント行と空行を除いてAPIトークンのみを読み込む
+    PYTHONANYWHERE_API_TOKEN=$(grep "^PYTHONANYWHERE_API_TOKEN=" config/.env | cut -d= -f2)
 fi
 
 if [ -z "$PYTHONANYWHERE_API_TOKEN" ]; then
