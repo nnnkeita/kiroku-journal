@@ -480,6 +480,18 @@
                     <div id="weather-info" class="flex items-center gap-2 text-sm text-gray-600">
                         <!-- 天気情報がここに表示される -->
                     </div>
+                    <!-- 体重トラッカー（天気の隣） -->
+                    <div id="weight-tracker-inline" class="hidden flex items-center gap-2 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-100 px-3 py-2">
+                        <span class="text-lg">⚖️</span>
+                        <div class="flex items-center gap-1">
+                            <input type="number" id="weight-input-inline" step="0.1" min="0" max="999" placeholder="kg" 
+                                   class="w-16 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <button onclick="saveWeight()" class="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition">💾</button>
+                        </div>
+                        <button onclick="syncWeightFromHealthPlanet()" class="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded transition">🔗</button>
+                        <button onclick="toggleWeightDatePicker()" class="px-2 py-1 bg-blue-200 hover:bg-blue-300 text-gray-700 text-xs rounded transition">📅</button>
+                        <span id="weight-status-inline" class="text-xs text-gray-500 min-w-[60px]"></span>
+                    </div>
                 </div>
 
                 <!-- 感情トラッカー（ムードセレクタ） -->
@@ -3169,27 +3181,33 @@
                 const currentPageId = window.currentPageId;
                 if (!currentPageId) return;
                 
-                const tracker = document.getElementById('weight-tracker');
-                if (!tracker) return;
+                const trackerOld = document.getElementById('weight-tracker');
+                const trackerInline = document.getElementById('weight-tracker-inline');
                 
-                // 日付ページかどうかチェック（YYYY-MM-DD 形式）
+                // 日付ページかどうかチェック（YYYY-MM-DD 形式 OR 日本語の「YYYY年MM月DD日」形式）
                 const pageTitleEl = document.getElementById('page-title');
                 if (!pageTitleEl) return;
                 
                 const pageTitle = pageTitleEl.value;
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(pageTitle)) {
-                    tracker.classList.add('hidden');
+                const isDateFormat = /^\d{4}-\d{2}-\d{2}$/.test(pageTitle) || 
+                                     /^\d{4}年\d{1,2}月\d{1,2}日$/.test(pageTitle);
+                
+                if (!isDateFormat) {
+                    if (trackerOld) trackerOld.classList.add('hidden');
+                    if (trackerInline) trackerInline.classList.add('hidden');
                     return;
                 }
                 
-                tracker.classList.remove('hidden');
+                // 日付ページなので表示
+                if (trackerOld) trackerOld.classList.add('hidden');  // 古い方は非表示
+                if (trackerInline) trackerInline.classList.remove('hidden');
                 
                 // ページから体重データを読み込む
                 fetch(`/api/pages/${currentPageId}/weight`)
                     .then(res => res.json())
                     .then(data => {
                         if (data.weight) {
-                            const inputEl = document.getElementById('weight-input');
+                            const inputEl = document.getElementById('weight-input-inline');
                             if (inputEl) {
                                 inputEl.value = data.weight;
                             }
@@ -3204,8 +3222,8 @@
         async function saveWeight() {
             try {
                 const currentPageId = window.currentPageId;
-                const weightInput = document.getElementById('weight-input');
-                const statusEl = document.getElementById('weight-status');
+                const weightInput = document.getElementById('weight-input-inline');
+                const statusEl = document.getElementById('weight-status-inline');
                 
                 if (!currentPageId || !weightInput || !statusEl) return;
                 
@@ -3224,27 +3242,28 @@
                 
                 if (res.ok) {
                     const data = await res.json();
-                    showWeightStatus(`✅ ${data.weight}kg を保存しました`, 'success');
+                    showWeightStatus(`✅ ${data.weight}kg`, 'success');
                 } else {
-                    showWeightStatus('❌ 保存に失敗しました', 'error');
+                    showWeightStatus('❌ 保存失敗', 'error');
                 }
             } catch (e) {
                 console.error('Error saving weight:', e);
-                showWeightStatus('❌ エラーが発生しました', 'error');
+                showWeightStatus('❌ エラー', 'error');
             }
         }
         
         async function syncWeightFromHealthPlanet() {
             try {
                 const currentPageId = window.currentPageId;
-                const btn = document.getElementById('weight-sync-btn');
-                const weightInput = document.getElementById('weight-input');
+                const syncButton = document.querySelector('button[onclick="syncWeightFromHealthPlanet()"]');
+                const weightInput = document.getElementById('weight-input-inline');
                 const pickerPanel = document.getElementById('weight-date-picker-panel');
                 
-                if (!currentPageId || !btn || !weightInput) return;
+                if (!currentPageId || !syncButton || !weightInput) return;
                 
-                btn.disabled = true;
-                btn.innerHTML = '取得中...';
+                syncButton.disabled = true;
+                const originalText = syncButton.innerHTML;
+                syncButton.innerHTML = '取得中...';
                 showWeightStatus('取得中...', 'info');
                 
                 // 日付が指定されているか確認
@@ -3269,12 +3288,12 @@
                 }
             } catch (e) {
                 console.error('Error syncing weight from Health Planet:', e);
-                showWeightStatus('❌ Health Planet から取得できません', 'error');
+                showWeightStatus('❌ エラー', 'error');
             } finally {
-                const btn = document.getElementById('weight-sync-btn');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '🔗 Health Planet から取得';
+                const syncButton = document.querySelector('button[onclick="syncWeightFromHealthPlanet()"]');
+                if (syncButton) {
+                    syncButton.disabled = false;
+                    syncButton.innerHTML = '🔗';
                 }
             }
         }
@@ -3346,20 +3365,20 @@
         }
         
         function showWeightStatus(message, type = 'info') {
-            const statusEl = document.getElementById('weight-status');
+            const statusEl = document.getElementById('weight-status-inline') || document.getElementById('weight-status');
+            if (!statusEl) return;
+            
             statusEl.textContent = message;
-            statusEl.classList.remove('hidden');
-            statusEl.className = 'text-xs hidden';
+            statusEl.className = 'text-xs';
             
             const colorClass = type === 'success' ? 'text-green-600' : 
                                type === 'error' ? 'text-red-600' : 
                                'text-blue-600';
             statusEl.classList.add(colorClass);
-            statusEl.classList.remove('hidden');
             
             setTimeout(() => {
-                statusEl.classList.add('hidden');
-            }, 3000);
+                statusEl.textContent = '';
+            }, 2000);
         }
     </script>
     {% if tts_enabled %}
