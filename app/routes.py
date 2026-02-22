@@ -1316,6 +1316,147 @@ def register_routes(app):
         else:
             return jsonify({'error': 'Method not allowed. Please use POST method.'}), 405
 
+    @app.route('/api/healthplanet/latest-weight', methods=['GET'])
+    def healthplanet_latest_weight():
+        """Health Planet から最新の体重データを取得"""
+        token_row = get_healthplanet_token()
+        if not token_row:
+            return jsonify({'error': 'HealthPlanetが未連携です'}), 400
+        
+        access_token = token_row['access_token']
+        expires_at = token_row['expires_at']
+        if expires_at:
+            try:
+                if datetime.fromisoformat(expires_at) < datetime.utcnow():
+                    return jsonify({'error': 'トークン期限切れです'}), 400
+            except Exception:
+                pass
+        
+        jst_now = datetime.utcnow() + timedelta(hours=9)
+        range_start = (jst_now - timedelta(days=30)).strftime('%Y%m%d%H%M%S')
+        to_str = jst_now.strftime('%Y%m%d%H%M%S')
+        
+        try:
+            data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, ['6021'])
+        except Exception as e:
+            return jsonify({'error': f'データ取得失敗: {str(e)}'}), 400
+        
+        weight = None
+        weight_date = None
+        for entry in data.get('data', []) if isinstance(data, dict) else []:
+            tag = str(entry.get('tag', ''))
+            keydata = str(entry.get('keydata', ''))
+            if tag == '6021':
+                weight = float(keydata)
+                weight_date = entry.get('date', '')
+                break
+        
+        if weight is None:
+            return jsonify({'error': 'データが見つかりません'}), 404
+        
+        return jsonify({
+            'weight': weight,
+            'date': weight_date,
+            'timestamp': datetime.utcnow().isoformat()
+        }), 200
+
+    @app.route('/api/pages/<int:page_id>/weight', methods=['GET'])
+    def get_page_weight(page_id):
+        """ページの体重データを取得"""
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute('SELECT weight, weight_at FROM pages WHERE id = ?', (page_id,))
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                return jsonify({'error': 'Page not found'}), 404
+            
+            weight = row['weight']
+            weight_at = row['weight_at']
+            
+            return jsonify({
+                'weight': weight,
+                'weight_at': weight_at
+            }), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/pages/<int:page_id>/weight', methods=['PUT'])
+    def update_page_weight(page_id):
+        """ページの体重データを更新（手動入力または Health Planet から取得）"""
+        try:
+            data = request.json or {}
+            weight = data.get('weight')
+            
+            if weight is not None:
+                try:
+                    weight = float(weight)
+                except (ValueError, TypeError):
+                    return jsonify({'error': 'Invalid weight value'}), 400
+            
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+            cursor.execute(
+                'UPDATE pages SET weight = ?, weight_at = ? WHERE id = ?',
+                (weight, now, page_id)
+            )
+            conn.commit()
+            
+            cursor.execute('SELECT weight, weight_at FROM pages WHERE id = ?', (page_id,))
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                return jsonify({'error': 'Page not found'}), 404
+            
+            return jsonify({
+                'weight': row['weight'],
+                'weight_at': row['weight_at']
+            }), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/pages/<int:page_id>/sync-weight-from-health-planet', methods=['POST'])
+    def sync_weight_from_health_planet(page_id):
+        """Health Planet から最新の体重をこのページに同期"""
+        try:
+            # まず Health Planet から最新体重を取得
+            hp_response = healthplanet_latest_weight()
+            if hp_response[1] != 200:
+                hp_data = hp_response[0].get_json()
+                return jsonify({'error': hp_data.get('error', 'Failed to get weight')}), hp_response[1]
+            
+            hp_data = hp_response[0].get_json()
+            weight = hp_data.get('weight')
+            
+            # ページに保存
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+            cursor.execute(
+                'UPDATE pages SET weight = ?, weight_at = ? WHERE id = ?',
+                (weight, now, page_id)
+            )
+            conn.commit()
+            
+            cursor.execute('SELECT weight, weight_at FROM pages WHERE id = ?', (page_id,))
+            row = cursor.fetchone()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'weight': row['weight'],
+                'weight_at': row['weight_at'],
+                'message': f'体重を同期しました: {weight}kg'
+            }), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
     @app.route('/api/pages/<int:page_id>/blocks', methods=['POST'])
     def create_block(page_id):
         data = request.json

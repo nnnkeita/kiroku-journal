@@ -500,6 +500,28 @@
                     <div id="mood-display" class="ml-auto text-sm text-gray-500"></div>
                 </div>
                 
+                <!-- 体重トラッカー（Health Planet 連携） -->
+                <div id="weight-tracker" class="hidden mb-6 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-100">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-lg">⚖️</span>
+                        <span class="text-sm font-semibold text-gray-700">体重記録</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="weight-input" step="0.1" min="0" max="999" placeholder="体重 (kg)" 
+                                   class="w-24 px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <span class="text-sm text-gray-600">kg</span>
+                        </div>
+                        <button id="weight-save-btn" onclick="saveWeight()" class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded font-semibold transition">
+                            保存
+                        </button>
+                        <button id="weight-sync-btn" onclick="syncWeightFromHealthPlanet()" class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm rounded font-semibold transition">
+                            🔗 Health Planet から取得
+                        </button>
+                        <span id="weight-status" class="text-xs text-gray-500 hidden"></span>
+                    </div>
+                </div>
+                
                 <!-- 感謝日記 -->
                 <div id="gratitude-journal" class="hidden mb-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg border border-amber-100">
                     <div class="flex items-center gap-2 mb-3">
@@ -1738,6 +1760,10 @@
                 gratitudeJournal.classList.add('hidden');
             }
             updateHealthplanetWeightDisplay(page.blocks || [], Boolean(dateMatch));
+            
+            // 体重トラッカーの初期化（日付ページのみ）
+            window.currentPageId = id;
+            initWeightTracker();
             
             // カテゴリーページ（筋トレ、英語学習、食事）の場合はタブを表示
             const categoryTabsDiv = document.getElementById('category-tabs');
@@ -3120,6 +3146,110 @@
                 btn.disabled = false;
                 btn.innerHTML = '💾 今日の記録を同期';
             }
+        }
+        
+        // === 体重トラッカー機能 ===
+        function initWeightTracker() {
+            const currentPageId = window.currentPageId;
+            if (!currentPageId) return;
+            
+            const tracker = document.getElementById('weight-tracker');
+            if (!tracker) return;
+            
+            // 日付ページかどうかチェック（YYYY-MM-DD 形式）
+            const pageTitle = document.getElementById('page-title').value;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(pageTitle)) {
+                tracker.classList.add('hidden');
+                return;
+            }
+            
+            tracker.classList.remove('hidden');
+            
+            // ページから体重データを読み込む
+            fetch(`/api/pages/${currentPageId}/weight`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.weight) {
+                        document.getElementById('weight-input').value = data.weight;
+                    }
+                })
+                .catch(e => console.log('Weight not loaded:', e));
+        }
+        
+        async function saveWeight() {
+            const currentPageId = window.currentPageId;
+            const weightInput = document.getElementById('weight-input');
+            const weight = parseFloat(weightInput.value);
+            const statusEl = document.getElementById('weight-status');
+            
+            if (isNaN(weight) || weight <= 0) {
+                showWeightStatus('❌ 有効な数値を入力してください', 'error');
+                return;
+            }
+            
+            try {
+                const res = await fetch(`/api/pages/${currentPageId}/weight`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ weight })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    showWeightStatus(`✅ ${data.weight}kg を保存しました`, 'success');
+                } else {
+                    showWeightStatus('❌ 保存に失敗しました', 'error');
+                }
+            } catch (e) {
+                showWeightStatus('❌ エラーが発生しました', 'error');
+            }
+        }
+        
+        async function syncWeightFromHealthPlanet() {
+            const currentPageId = window.currentPageId;
+            const btn = document.getElementById('weight-sync-btn');
+            const weightInput = document.getElementById('weight-input');
+            
+            btn.disabled = true;
+            btn.innerHTML = '取得中...';
+            showWeightStatus('取得中...', 'info');
+            
+            try {
+                const res = await fetch(`/api/pages/${currentPageId}/sync-weight-from-health-planet`, {
+                    method: 'POST'
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    weightInput.value = data.weight;
+                    showWeightStatus(`✅ ${data.weight}kg を同期しました`, 'success');
+                } else {
+                    const data = await res.json();
+                    showWeightStatus(`❌ ${data.error || '取得失敗'}`, 'error');
+                }
+            } catch (e) {
+                showWeightStatus('❌ Health Planet から取得できません', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '🔗 Health Planet から取得';
+            }
+        }
+        
+        function showWeightStatus(message, type = 'info') {
+            const statusEl = document.getElementById('weight-status');
+            statusEl.textContent = message;
+            statusEl.classList.remove('hidden');
+            statusEl.className = 'text-xs hidden';
+            
+            const colorClass = type === 'success' ? 'text-green-600' : 
+                               type === 'error' ? 'text-red-600' : 
+                               'text-blue-600';
+            statusEl.classList.add(colorClass);
+            statusEl.classList.remove('hidden');
+            
+            setTimeout(() => {
+                statusEl.classList.add('hidden');
+            }, 3000);
         }
     </script>
     {% if tts_enabled %}

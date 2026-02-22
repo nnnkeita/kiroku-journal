@@ -93,6 +93,18 @@ def init_db():
     except sqlite3.OperationalError:
         pass
     
+    # 体重カラムを追加（Health Planet 連携用）
+    try:
+        cursor.execute("ALTER TABLE pages ADD COLUMN weight REAL DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass
+    
+    # 体重取得日時を追加
+    try:
+        cursor.execute("ALTER TABLE pages ADD COLUMN weight_at TEXT DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass
+    
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS blocks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
