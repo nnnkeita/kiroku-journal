@@ -128,10 +128,6 @@ def register_routes(app):
         if not token_row:
             return False, 'HealthPlanetが未連携です。'
 
-        print(f"[DEBUG] Token Row: {token_row}")
-        print(f"[DEBUG] Access Token: {token_row['access_token']}, Expires At: {token_row['expires_at']}")
-        print(f"[DEBUG] Time Range: From {from_str} To {to_str}")
-
         access_token = token_row['access_token']
         expires_at = token_row['expires_at']
         if expires_at:
@@ -146,6 +142,10 @@ def register_routes(app):
         from_str = start.strftime('%Y%m%d%H%M%S')
         to_str = jst_now.strftime('%Y%m%d%H%M%S')
         date_str = jst_now.strftime('%Y-%m-%d')
+
+        print(f"[DEBUG] Token Row: {token_row}")
+        print(f"[DEBUG] Access Token: {token_row['access_token']}, Expires At: {token_row['expires_at']}")
+        print(f"[DEBUG] Time Range: From {from_str} To {to_str}")
 
         try:
             data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, ['6021', '6022', '6028'])
