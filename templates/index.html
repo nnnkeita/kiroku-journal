@@ -714,6 +714,25 @@
         </div>
     </div>
 
+    <!-- Health Planet モーダル -->
+    <div id="healthplanet-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center" onclick="closeHealthPlanetMenu(event)">
+        <div class="bg-white w-full max-w-md rounded-lg shadow-xl overflow-hidden flex flex-col">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-800">⚖️ Health Planet</h2>
+                <button onclick="closeHealthPlanetMenu()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            <div class="p-4 space-y-3">
+                <p class="text-sm text-gray-600">タニタの体重計・体組成計と連携して、健康データを自動で記録できます。</p>
+                <div id="healthplanet-status" class="p-3 bg-gray-50 rounded text-sm text-gray-700">
+                    確認中...
+                </div>
+                <a href="/healthplanet" class="block w-full text-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold">
+                    💬 詳細を見る
+                </a>
+            </div>
+        </div>
+    </div>
+
     <input type="file" id="cover-upload" class="hidden" accept="image/*" onchange="uploadCover(this)">
     <input type="file" id="block-upload" class="hidden" onchange="uploadBlockFile(this)">
     <input type="file" id="json-import" class="hidden" accept=".json" onchange="importJsonFile(this)">
@@ -2855,6 +2874,34 @@
             await fetchPages();
             loadPage(page.id);
         }
+
+        // --- Health Planet 機能 ---
+        async function showHealthPlanetMenu() {
+            document.getElementById('healthplanet-modal').classList.remove('hidden');
+            
+            try {
+                const res = await fetch('/api/healthplanet/status');
+                const data = await res.json();
+                const statusEl = document.getElementById('healthplanet-status');
+                
+                if (data.connected && !data.is_expired) {
+                    statusEl.innerHTML = '✅ <strong>連携済み</strong><br><small class="text-gray-500">タニタデバイスのデータを定期的に同期します</small>';
+                    statusEl.className = 'p-3 bg-green-50 rounded text-sm text-green-700 border border-green-200';
+                } else {
+                    statusEl.innerHTML = '❌ <strong>未連携</strong><br><small class="text-gray-500">詳細ページから連携できます</small>';
+                    statusEl.className = 'p-3 bg-red-50 rounded text-sm text-red-700 border border-red-200';
+                }
+            } catch (e) {
+                document.getElementById('healthplanet-status').innerHTML = '⚠️ 状態確認に失敗しました';
+            }
+        }
+
+        function closeHealthPlanetMenu(e) {
+            if (!e || e.target.id === 'healthplanet-modal') {
+                document.getElementById('healthplanet-modal').classList.add('hidden');
+            }
+        }
+
         // --- エクスポート/インポート機能 ---
         function showExportImportMenu() {
             document.getElementById('export-import-modal').classList.remove('hidden');

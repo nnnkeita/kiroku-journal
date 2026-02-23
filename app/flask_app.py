@@ -148,7 +148,9 @@ def require_login():
         'forgot_password',
         'terms',
         'privacy',
-        'tokusho'
+        'tokusho',
+        'healthplanet_auth',
+        'healthplanet_callback'
     }
     if request.endpoint in public_endpoints:
         return
@@ -188,6 +190,11 @@ def finished_page():
     if finished:
         return render_template('index.html', finished_id=finished['id'], tts_enabled=TTS_ENABLED, calorie_enabled=CALORIE_ENABLED, current_user=session.get('username'))
     return render_template('index.html', tts_enabled=TTS_ENABLED, calorie_enabled=CALORIE_ENABLED, current_user=session.get('username'))
+
+@app.route('/healthplanet')
+def healthplanet_page():
+    """Health Planet 連携ページ"""
+    return render_template('healthplanet.html', current_user=session.get('username'))
 
 @app.route('/uploads/<filename>')
 def download_file(filename):

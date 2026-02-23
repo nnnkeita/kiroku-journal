@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Planet - 便利記録</title>
+    <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPゴシック:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'BIZ UDPゴシック', sans-serif; }
+        
+        .spinner {
+            border: 3px solid rgba(148, 163, 184, 0.1);
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        
+        .badge-warning {
+            background-color: #fef3c7;
+            color: #78350f;
+        }
+        
+        .badge-error {
+            background-color: #fee2e2;
+            color: #7f1d1d;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow">
+            <div class="max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">Health Planet</h1>
+                        <p class="text-gray-600 text-sm mt-1">タニタの健康データを自動で記録</p>
+                    </div>
+                    <a href="/" class="text-blue-600 hover:text-blue-700 text-sm">← 戻る</a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            <!-- Status Section -->
+            <div class="bg-white rounded-lg shadow mb-6 p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                    <span class="text-2xl mr-2">🔗</span>
+                    連携状況
+                </h2>
+                
+                <div id="statusContainer" class="flex items-center justify-center py-8">
+                    <div class="spinner"></div>
+                    <span class="ml-3 text-gray-600">確認中...</span>
+                </div>
+            </div>
+
+            <!-- Latest Data Section -->
+            <div id="dataSection" class="hidden bg-white rounded-lg shadow mb-6 p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                    <span class="text-2xl mr-2">📊</span>
+                    最新データ
+                </h2>
+                
+                <div id="latestData" class="space-y-3">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded">
+                        <span class="text-gray-700">体重</span>
+                        <span id="weight" class="text-lg font-semibold text-gray-900">-</span>
+                    </div>
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded">
+                        <span class="text-gray-700">計測日時</span>
+                        <span id="measureDate" class="text-sm text-gray-600">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connected Controls -->
+            <div id="connectedControls" class="hidden bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">操作</h2>
+                
+                <div class="flex gap-3">
+                    <button id="syncBtn" onclick="syncData()" 
+                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center transition">
+                        <span id="syncBtnText">🔄 今すぐ同期</span>
+                        <span id="syncSpinner" class="hidden ml-2 spinner" style="width: 16px; height: 16px; border-width: 2px;"></span>
+                    </button>
+                    
+                    <button id="disconnectBtn" onclick="disconnect()" 
+                            class="bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-2 px-4 rounded-lg transition">
+                        ❌ 連携を解除
+                    </button>
+                </div>
+                
+                <div id="syncMessage" class="mt-3 p-3 rounded-lg hidden"></div>
+            </div>
+
+            <!-- Not Connected -->
+            <div id="notConnectedSection" class="hidden bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                    <span class="text-2xl mr-2">⚠️</span>
+                    未連携
+                </h2>
+                
+                <p class="text-gray-600 mb-4">
+                    Health Planet（タニタ体重計・体組成計）の データを自動で記録できます。
+                </p>
+                
+                <button id="authBtn" onclick="startAuth()" 
+                        class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition">
+                    🔗 Health Planet に連携する
+                </button>
+            </div>
+
+            <!-- Info Section -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-8">
+                <h3 class="font-semibold text-blue-900 mb-3">📖 使い方</h3>
+                <ul class="text-sm text-blue-800 space-y-2">
+                    <li>✅ はじめに「Health Planet に連携する」をクリック</li>
+                    <li>✅ タニタのアカウントでログイン</li>
+                    <li>✅ 「今すぐ同期」で最新データを取得</li>
+                    <li>✅ データは毎日自動更新されます</li>
+                </ul>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let isConnected = false;
+
+        async function checkStatus() {
+            try {
+                const res = await fetch('/api/healthplanet/status');
+                const data = await res.json();
+                isConnected = data.connected && !data.is_expired;
+                
+                updateUI();
+                
+                if (isConnected) {
+                    loadLatestData();
+                }
+            } catch (error) {
+                console.error('Status check failed:', error);
+                showError('状態確認に失敗しました');
+            }
+        }
+
+        function updateUI() {
+            const statusContainer = document.getElementById('statusContainer');
+            const dataSection = document.getElementById('dataSection');
+            const connectedControls = document.getElementById('connectedControls');
+            const notConnectedSection = document.getElementById('notConnectedSection');
+
+            statusContainer.innerHTML = '';
+
+            if (isConnected) {
+                const badge = document.createElement('span');
+                badge.className = 'badge badge-success';
+                badge.textContent = '✅ 連携済み';
+                statusContainer.appendChild(badge);
+                
+                dataSection.classList.remove('hidden');
+                connectedControls.classList.remove('hidden');
+                notConnectedSection.classList.add('hidden');
+            } else {
+                const badge = document.createElement('span');
+                badge.className = 'badge badge-error';
+                badge.textContent = '❌ 未連携';
+                statusContainer.appendChild(badge);
+                
+                dataSection.classList.add('hidden');
+                connectedControls.classList.add('hidden');
+                notConnectedSection.classList.remove('hidden');
+            }
+        }
+
+        async function loadLatestData() {
+            try {
+                const res = await fetch('/api/healthplanet/latest-weight');
+                const data = await res.json();
+
+                if (!res.ok) {
+                    document.getElementById('weight').textContent = 'エラー';
+                    document.getElementById('measureDate').textContent = data.error || 'データ取得失敗';
+                    return;
+                }
+
+                const weight = data.weight;
+                const weight_date = data.date;
+
+                document.getElementById('weight').textContent = `${weight} kg`;
+                
+                if (weight_date) {
+                    try {
+                        const dateObj = new Date(
+                            weight_date.substring(0, 4),
+                            parseInt(weight_date.substring(4, 6)) - 1,
+                            weight_date.substring(6, 8),
+                            weight_date.substring(8, 10),
+                            weight_date.substring(10, 12)
+                        );
+                        document.getElementById('measureDate').textContent = dateObj.toLocaleString('ja-JP');
+                    } catch (e) {
+                        document.getElementById('measureDate').textContent = weight_date;
+                    }
+                }
+            } catch (error) {
+                console.error('Latest data fetch failed:', error);
+                document.getElementById('weight').textContent = 'エラー';
+                document.getElementById('measureDate').textContent = 'データ取得失敗';
+            }
+        }
+
+        function startAuth() {
+            window.location.href = '/api/healthplanet/auth';
+        }
+
+        async function syncData() {
+            const btn = document.getElementById('syncBtn');
+            const btnText = document.getElementById('syncBtnText');
+            const spinner = document.getElementById('syncSpinner');
+            const msg = document.getElementById('syncMessage');
+
+            btn.disabled = true;
+            btnText.textContent = '同期中...';
+            spinner.classList.remove('hidden');
+            msg.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/healthplanet/sync', { method: 'POST' });
+                const data = await res.json();
+
+                if (res.ok) {
+                    showSuccess('同期が完了しました');
+                    setTimeout(loadLatestData, 500);
+                } else {
+                    showError(data.message || 'アップ失敗');
+                }
+            } catch (error) {
+                console.error('Sync failed:', error);
+                showError('同期に失敗しました');
+            } finally {
+                btn.disabled = false;
+                btnText.textContent = '🔄 今すぐ同期';
+                spinner.classList.add('hidden');
+            }
+        }
+
+        async function disconnect() {
+            if (!confirm('Health Planet との連携を解除しますか？')) return;
+
+            try {
+                const res = await fetch('/api/healthplanet/disconnect', { method: 'POST' });
+                const data = await res.json();
+
+                if (res.ok) {
+                    isConnected = false;
+                    updateUI();
+                    showSuccess('連携を解除しました');
+                } else {
+                    showError(data.error || '解除失敗');
+                }
+            } catch (error) {
+                console.error('Disconnect failed:', error);
+                showError('解除に失敗しました');
+            }
+        }
+
+        function showSuccess(message) {
+            const msg = document.getElementById('syncMessage');
+            msg.className = 'p-3 rounded-lg bg-green-50 border border-green-200 text-green-800';
+            msg.textContent = '✅ ' + message;
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 4000);
+        }
+
+        function showError(message) {
+            const msg = document.getElementById('syncMessage');
+            msg.className = 'p-3 rounded-lg bg-red-50 border border-red-200 text-red-800';
+            msg.textContent = '❌ ' + message;
+            msg.classList.remove('hidden');
+        }
+
+        // Initialize on page load
+        checkStatus();
+        
+        // Refresh status every 30 seconds
+        setInterval(checkStatus, 30000);
+    </script>
+</body>
+</html>
