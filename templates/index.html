@@ -1802,6 +1802,13 @@
                 setupMoodTracker();
                 loadMoodData(page);
                 loadGratitudeData(page);
+                
+                // Health Planet の自動同期を実行（日付ページが開かれたら自動で同期）
+                const year = dateMatch[1];
+                const month = String(dateMatch[2]).padStart(2, '0');
+                const day = String(dateMatch[3]).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+                syncHealthPlanetForDate(dateStr);
             } else {
                 moodTracker.classList.add('hidden');
                 gratitudeJournal.classList.add('hidden');
@@ -3296,6 +3303,43 @@
             } catch (e) {
                 console.error('Error saving weight:', e);
                 showWeightStatus('❌ エラー', 'error');
+            }
+        }
+        
+        /**
+         * Health Planet のデータを指定日付で同期（バックグラウンド実行）
+         * ページ読み込み時に自動的に呼び出される
+         */
+        async function syncHealthPlanetForDate(dateStr) {
+            try {
+                console.log(`[HealthPlanet] Syncing data for date: ${dateStr}`);
+                const res = await fetch('/api/healthplanet/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: dateStr })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log(`[HealthPlanet] Sync successful: ${data.message}`);
+                    // ページを再読み込みして、同期されたデータを表示
+                    if (currentPageId) {
+                        setTimeout(() => {
+                            fetchPages(); // サイドバーを更新
+                            const res2 = fetch(`/api/pages/${currentPageId}`);
+                            res2.then(r => r.json()).then(page => {
+                                currentBlocks = (page.blocks || []).slice().sort((a, b) => a.position - b.position);
+                                renderBlocks(currentBlocks);
+                                updateHealthplanetWeightDisplay(page.blocks || [], true);
+                            });
+                        }, 500); // 少し遅延させて、バックエンド側の処理を待つ
+                    }
+                } else {
+                    const data = await res.json();
+                    console.warn(`[HealthPlanet] Sync failed: ${data.message || data.error}`);
+                }
+            } catch (e) {
+                console.error('[HealthPlanet] Sync error:', e);
             }
         }
         

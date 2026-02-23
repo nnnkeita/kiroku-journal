@@ -123,7 +123,15 @@ def register_routes(app):
             (page_id, content, new_pos, props)
         )
 
-    def sync_healthplanet_today():
+    def sync_healthplanet_for_date(target_date=None):
+        """指定日付（またはJST現在時刻）のHealthPlaneのデータを同期
+        
+        Args:
+            target_date (str, optional): 同期対象日付 (YYYY-MM-DD形式). Noneなら今日
+            
+        Returns:
+            tuple: (成功フラグ, メッセージ)
+        """
         token_row = get_healthplanet_token()
         if not token_row:
             return False, 'HealthPlanetが未連携です。'
@@ -137,15 +145,28 @@ def register_routes(app):
             except Exception:
                 pass
 
+        # 対象日付を決定
         jst_now = datetime.utcnow() + timedelta(hours=9)
-        start = jst_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if target_date:
+            try:
+                target_dt = datetime.strptime(target_date, '%Y-%m-%d')
+                # タイムゾーン補正（指定日付を23時59分59秒まで取得）
+                date_str = target_date
+                start = target_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = target_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            except ValueError:
+                return False, f'日付形式が正しくありません: {target_date}'
+        else:
+            date_str = jst_now.strftime('%Y-%m-%d')
+            start = jst_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = jst_now
+
         from_str = start.strftime('%Y%m%d%H%M%S')
-        to_str = jst_now.strftime('%Y%m%d%H%M%S')
-        date_str = jst_now.strftime('%Y-%m-%d')
+        to_str = end.strftime('%Y%m%d%H%M%S')
 
         print(f"[DEBUG] Token Row: {token_row}")
         print(f"[DEBUG] Access Token: {token_row['access_token']}, Expires At: {token_row['expires_at']}")
-        print(f"[DEBUG] Time Range: From {from_str} To {to_str}")
+        print(f"[DEBUG] Time Range: From {from_str} To {to_str} (Date: {date_str})")
 
         try:
             data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, ['6021', '6022', '6028'])
@@ -174,7 +195,7 @@ def register_routes(app):
 
         content = _format_healthplanet_line(latest_values)
         if not content:
-            range_start = (jst_now - timedelta(days=90)).strftime('%Y%m%d%H%M%S')
+            range_start = (datetime.utcnow() + timedelta(hours=9) - timedelta(days=90)).strftime('%Y%m%d%H%M%S')
             try:
                 data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, ['6021', '6022', '6028'])
             except Exception:
@@ -212,6 +233,10 @@ def register_routes(app):
         conn.commit()
         conn.close()
         return True, '同期しました。'
+
+    def sync_healthplanet_today():
+        """今日のHealthPlaneデータを同期 (従来互換性)"""
+        return sync_healthplanet_for_date(None)
 
     @app.route('/api/inbox', methods=['GET'])
     def get_inbox():
@@ -1309,12 +1334,16 @@ def register_routes(app):
 
     @app.route('/api/healthplanet/sync', methods=['GET', 'POST'])
     def healthplanet_sync():
+        # POSTパラメータまたはGETパラメータから日付を取得
         if request.method == 'POST':
-            ok, message = sync_healthplanet_today()
-            status = 200 if ok else 400
-            return jsonify({'message': message}), status
+            data = request.json or {}
+            target_date = data.get('date')
         else:
-            return jsonify({'error': 'Method not allowed. Please use POST method.'}), 405
+            target_date = request.args.get('date')
+        
+        ok, message = sync_healthplanet_for_date(target_date)
+        status = 200 if ok else 400
+        return jsonify({'message': message}), status
 
     @app.route('/api/healthplanet/latest-weight', methods=['GET'])
     def healthplanet_latest_weight():

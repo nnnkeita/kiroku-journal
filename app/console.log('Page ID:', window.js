@@ -1,0 +1,1 @@
+console.log('Page ID:', window.currentPageId);console.log('Page ID:', window.currentPageId);
