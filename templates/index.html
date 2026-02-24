@@ -995,7 +995,7 @@
         }
 
         function extractHealthplanetData(blocks) {
-            """全Health Planetデータを抽出"""
+            // 全Health Planetデータを抽出
             if (!Array.isArray(blocks)) return '';
             const hpBlock = blocks.find(block => {
                 const props = parseBlockProps(block?.props) || {};
