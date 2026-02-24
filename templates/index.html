@@ -472,7 +472,7 @@
                             ← 前日
                         </button>
                         <span id="date-display" class="text-gray-400"></span>
-                        <span id="healthplanet-weight" class="hidden text-xs text-gray-500 bg-white/60 border border-gray-200 rounded px-2 py-1"></span>
+                        <span id="healthplanet-weight" class="hidden text-xs text-gray-500 bg-white/60 border border-gray-200 rounded px-2 py-1 max-w-md truncate"></span>
                         <button onclick="navigateDate(1)" class="flex items-center gap-1 px-3 py-2 hover:bg-gray-100 rounded transition">
                             翌日 →
                         </button>
@@ -994,7 +994,8 @@
             }
         }
 
-        function extractHealthplanetWeight(blocks) {
+        function extractHealthplanetData(blocks) {
+            """全Health Planetデータを抽出"""
             if (!Array.isArray(blocks)) return '';
             const hpBlock = blocks.find(block => {
                 const props = parseBlockProps(block?.props) || {};
@@ -1005,26 +1006,26 @@
                 const fallback = blocks.find(block => (block?.content || '').includes('体重'));
                 content = fallback?.content || '';
             }
-            const match = content.match(/体重\s*([0-9.]+)\s*kg/);
-            return match ? match[1] : '';
+            return content;
         }
 
-        function updateHealthplanetWeightDisplay(blocks, isDatePage) {
-            const weightEl = document.getElementById('healthplanet-weight');
-            if (!weightEl) return;
+        function updateHealthplanetDataDisplay(blocks, isDatePage) {
+            const dataEl = document.getElementById('healthplanet-weight');
+            if (!dataEl) return;
             if (!isDatePage) {
-                weightEl.innerText = '';
-                weightEl.classList.add('hidden');
+                dataEl.innerText = '';
+                dataEl.classList.add('hidden');
                 return;
             }
-            const weight = extractHealthplanetWeight(blocks);
-            if (!weight) {
-                weightEl.innerText = '';
-                weightEl.classList.add('hidden');
+            const data = extractHealthplanetData(blocks);
+            if (!data) {
+                dataEl.innerText = '';
+                dataEl.classList.add('hidden');
                 return;
             }
-            weightEl.innerText = `体重 ${weight}kg`;
-            weightEl.classList.remove('hidden');
+            // === 全情報を表示（体重、体脂肪、筋肉量など） ===
+            dataEl.innerText = data;
+            dataEl.classList.remove('hidden');
         }
 
         // --- 感情トラッカー機能 ---
@@ -1849,7 +1850,7 @@
                 gratitudeJournal.classList.add('hidden');
             }
             
-            updateHealthplanetWeightDisplay(page.blocks || [], Boolean(dateMatch));
+            updateHealthplanetDataDisplay(page.blocks || [], Boolean(dateMatch));
             // 体重トラッカーボックスは削除しました
             // initWeightTracker();
             
@@ -3386,7 +3387,7 @@
                             res2.then(r => r.json()).then(page => {
                                 currentBlocks = (page.blocks || []).slice().sort((a, b) => a.position - b.position);
                                 renderBlocks(currentBlocks);
-                                updateHealthplanetWeightDisplay(page.blocks || [], true);
+                                updateHealthplanetDataDisplay(page.blocks || [], true);
                                 // === キャッシュを更新 ===
                                 pageCache[currentPageId] = page;
                             });
