@@ -81,16 +81,43 @@ def register_routes(app):
             return json.loads(resp.read().decode('utf-8'))
 
     def _format_healthplanet_line(measurements):
+        """Health Planetのすべての測定項目をフォーマット"""
+        # Health Planetのタグマッピング
+        tags_display = {
+            '6021': '体重',
+            '6022': '体脂肪率',
+            '6023': '筋肉量',
+            '6024': '筋肉スコア',
+            '6025': '推定骨量',
+            '6026': '体水分率',
+            '6027': '推定基礎代謝量',
+            '6028': '体内年齢',
+            '6029': '体脂肪量'
+        }
+        
+        # 単位のマッピング
+        tags_unit = {
+            '6021': 'kg',
+            '6022': '%',
+            '6023': 'kg',
+            '6024': '点',
+            '6025': 'kg',
+            '6026': '%',
+            '6027': 'kcal/day',
+            '6028': '才',
+            '6029': 'kg'
+        }
+        
         parts = []
-        weight = measurements.get('6021')
-        fat = measurements.get('6022')
-        body_age = measurements.get('6028')
-        if weight:
-            parts.append(f"体重 {weight}kg")
-        if fat:
-            parts.append(f"体脂肪 {fat}%")
-        if body_age:
-            parts.append(f"体内年齢 {body_age}才")
+        # 表示順序を固定
+        ordered_tags = ['6021', '6022', '6023', '6024', '6025', '6026', '6027', '6028', '6029']
+        for tag in ordered_tags:
+            value = measurements.get(tag)
+            if value:
+                display_name = tags_display.get(tag, tag)
+                unit = tags_unit.get(tag, '')
+                parts.append(f"{display_name} {value}{unit}")
+        
         return ' / '.join(parts)
 
     def _upsert_healthplanet_block(cursor, page_id, content):
@@ -169,7 +196,9 @@ def register_routes(app):
         print(f"[DEBUG] Time Range: From {from_str} To {to_str} (Date: {date_str})")
 
         try:
-            data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, ['6021', '6022', '6028'])
+            # === Health Planetから全測定項目を取得 ===
+            all_tags = ['6021', '6022', '6023', '6024', '6025', '6026', '6027', '6028', '6029']
+            data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, all_tags)
             print(f"[DEBUG] Fetched Data: {data}")
         except Exception as e:
             print(f"[ERROR] Fetch HealthPlanet Data Failed: {e}")
@@ -197,7 +226,9 @@ def register_routes(app):
         if not content:
             range_start = (datetime.utcnow() + timedelta(hours=9) - timedelta(days=90)).strftime('%Y%m%d%H%M%S')
             try:
-                data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, ['6021', '6022', '6028'])
+                # === 過去90日分から全タグを取得 ===
+                all_tags = ['6021', '6022', '6023', '6024', '6025', '6026', '6027', '6028', '6029']
+                data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, all_tags)
             except Exception:
                 return False, 'HealthPlanetの取得に失敗しました。'
             measurements = {}
@@ -627,6 +658,14 @@ def register_routes(app):
             conn.close()
             return jsonify({'error': 'Page not found'}), 404
         page = dict(page_row)
+        
+        # === 親ページ情報を内含めて高速化 ===
+        if page.get('parent_id'):
+            cursor.execute('SELECT id, title, icon FROM pages WHERE id = ?', (page['parent_id'],))
+            parent_row = cursor.fetchone()
+            if parent_row:
+                page['parent_page'] = dict(parent_row)
+        
         # インデックスを活用してブロック取得を高速化
         cursor.execute('''
             SELECT * FROM blocks 
@@ -1366,7 +1405,8 @@ def register_routes(app):
         to_str = jst_now.strftime('%Y%m%d%H%M%S')
         
         try:
-            data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, ['6021'])
+            all_tags = ['6021', '6022', '6023', '6024', '6025', '6026', '6027', '6028', '6029']
+            data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, all_tags)
         except Exception as e:
             error_msg = str(e)
             if 'Expecting value' in error_msg or 'JSON' in error_msg:
@@ -1495,7 +1535,8 @@ def register_routes(app):
             access_token = token_row['access_token']
             
             try:
-                hp_data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, ['6021'])
+                all_tags = ['6021', '6022', '6023', '6024', '6025', '6026', '6027', '6028', '6029']
+                hp_data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, all_tags)
             except Exception as e:
                 error_msg = str(e)
                 if 'Expecting value' in error_msg or 'JSON' in error_msg:
@@ -1575,7 +1616,8 @@ def register_routes(app):
             to_str = end_time.strftime('%Y%m%d%H%M%S')
             
             try:
-                hp_data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, ['6021'])
+                all_tags = ['6021', '6022', '6023', '6024', '6025', '6026', '6027', '6028', '6029']
+                hp_data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, all_tags)
             except Exception as e:
                 return jsonify({'error': f'取得失敗: {str(e)}'}), 400
             

@@ -480,18 +480,6 @@
                     <div id="weather-info" class="flex items-center gap-2 text-sm text-gray-600">
                         <!-- 天気情報がここに表示される -->
                     </div>
-                    <!-- 体重トラッカー（天気の隣） -->
-                    <div id="weight-tracker-inline" class="hidden flex items-center gap-2 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-100 px-3 py-2">
-                        <span class="text-lg">⚖️</span>
-                        <div class="flex items-center gap-1">
-                            <input type="number" id="weight-input-inline" step="0.1" min="0" max="999" placeholder="kg" 
-                                   class="w-16 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <button onclick="saveWeight()" class="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition">💾</button>
-                        </div>
-                        <button onclick="syncWeightFromHealthPlanet()" class="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded transition">🔗</button>
-                        <button onclick="toggleWeightDatePicker()" class="px-2 py-1 bg-blue-200 hover:bg-blue-300 text-gray-700 text-xs rounded transition">📅</button>
-                        <span id="weight-status-inline" class="text-xs text-gray-500 min-w-[60px]"></span>
-                    </div>
                 </div>
 
                 <!-- 感情トラッカー（ムードセレクタ） -->
@@ -1730,6 +1718,10 @@
             localStorage.setItem('collapsedFolders', JSON.stringify(Array.from(collapsedFolders)));
         }
 
+        // ページキャッシュ（メモリ）
+        const pageCache = {};
+        const CACHE_SIZE = 20; // 最大20ページをキャッシュ
+        
         async function loadPage(id) {
             currentPageId = id;
             window.currentPageId = id;
@@ -1740,12 +1732,26 @@
             const blocksContainer = document.getElementById('blocks');
             blocksContainer.innerHTML = '<div class="p-8 text-center text-gray-400"><div class="loader inline-block"></div></div>';
             
-            // fetchPagesを非同期で実行（ブロッキングしない）
+            // サイドバー更新を非同期で実行（ブロッキングしない）
             fetchPages();
             
-            const res = await fetch(`/api/pages/${id}`);
-            const page = await res.json();
+            // キャッシュから取得を試みる
+            let page = pageCache[id];
             
+            // キャッシュがなければフェッチ
+            if (!page) {
+                const res = await fetch(`/api/pages/${id}`);
+                page = await res.json();
+                
+                // キャッシュに保存（容量管理）
+                pageCache[id] = page;
+                const cacheKeys = Object.keys(pageCache);
+                if (cacheKeys.length > CACHE_SIZE) {
+                    delete pageCache[cacheKeys[0]];
+                }
+            }
+            
+            // === 高速描画開始（スケルトン画面） ===
             const coverDiv = document.getElementById('cover-image');
             const addCoverBtn = document.getElementById('add-cover-trigger');
             if (page.cover_image) {
@@ -1773,66 +1779,98 @@
                 dailyTotalEl.classList.toggle('hidden', !isFoodPage);
             }
             
-            // 親ページの表示
+            // === 非同期処理を並列実行 ===
             const breadcrumb = document.getElementById('parent-breadcrumb');
+            const promises = [];
+            
+            // 親ページ情報取得（APIレスポンスに含まれていれば使用、なければフェッチ）
             if (page.parent_id) {
-                const parentRes = await fetch(`/api/pages/${page.parent_id}`);
-                const parentPage = await parentRes.json();
-                document.getElementById('parent-icon').innerText = parentPage.icon;
-                document.getElementById('parent-title').innerText = parentPage.title;
-                document.getElementById('parent-link').onclick = (e) => {
-                    e.preventDefault();
-                    loadPage(page.parent_id);
-                };
-                breadcrumb.classList.remove('hidden');
+                let parentPage = page.parent_page; // APIレスポンスから取得
+                
+                if (!parentPage) {
+                    // キャッシュ互換性のため、古いAPIからも対応
+                    parentPage = pageCache[page.parent_id];
+                    if (!parentPage) {
+                        promises.push(
+                            fetch(`/api/pages/${page.parent_id}`).then(r => r.json()).then(p => {
+                                pageCache[page.parent_id] = p;
+                                parentPage = p;
+                            })
+                        );
+                    }
+                }
+                
+                // 親ページ情報を表示
+                if (parentPage) {
+                    document.getElementById('parent-icon').innerText = parentPage.icon;
+                    document.getElementById('parent-title').innerText = parentPage.title;
+                    document.getElementById('parent-link').onclick = (e) => {
+                        e.preventDefault();
+                        loadPage(page.parent_id);
+                    };
+                    breadcrumb.classList.remove('hidden');
+                }
             } else {
                 breadcrumb.classList.add('hidden');
             }
             
-            // 日付ページかどうか判定してナビゲーション表示
-            checkAndShowDateNavigation(page.title);
+            // waitForParentIfNeeded: parentPageがキャッシュから取得待ち中の場合、完了を待つ
+            if (promises.length > 0 && page.parent_id && !page.parent_page) {
+                promises.push(Promise.resolve()); // プレースホルダー
+            }
             
-            // 日付ページの場合は感情トラッカーと感謝日記を表示
-            const moodTracker = document.getElementById('mood-tracker');
-            const gratitudeJournal = document.getElementById('gratitude-journal');
+            // 日付ナビゲーション、ムード、感謝日記を並列実行
             const dateMatch = page.title.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
             if (dateMatch) {
+                const moodTracker = document.getElementById('mood-tracker');
+                const gratitudeJournal = document.getElementById('gratitude-journal');
                 moodTracker.classList.remove('hidden');
                 gratitudeJournal.classList.remove('hidden');
-                setupMoodTracker();
-                loadMoodData(page);
-                loadGratitudeData(page);
                 
-                // Health Planet の自動同期を実行（日付ページが開かれたら自動で同期）
-                const year = dateMatch[1];
-                const month = String(dateMatch[2]).padStart(2, '0');
-                const day = String(dateMatch[3]).padStart(2, '0');
-                const dateStr = `${year}-${month}-${day}`;
-                syncHealthPlanetForDate(dateStr);
+                promises.push(
+                    Promise.resolve().then(() => {
+                        checkAndShowDateNavigation(page.title);
+                        setupMoodTracker();
+                        loadMoodData(page);
+                        loadGratitudeData(page);
+                        
+                        // Health Planet 自動同期を非同期で実行
+                        const year = dateMatch[1];
+                        const month = String(dateMatch[2]).padStart(2, '0');
+                        const day = String(dateMatch[3]).padStart(2, '0');
+                        const dateStr = `${year}-${month}-${day}`;
+                        syncHealthPlanetForDate(dateStr); // 待たない
+                    })
+                );
             } else {
+                const moodTracker = document.getElementById('mood-tracker');
+                const gratitudeJournal = document.getElementById('gratitude-journal');
                 moodTracker.classList.add('hidden');
                 gratitudeJournal.classList.add('hidden');
             }
+            
             updateHealthplanetWeightDisplay(page.blocks || [], Boolean(dateMatch));
+            // 体重トラッカーボックスは削除しました
+            // initWeightTracker();
             
-            // 体重トラッカーの初期化（日付ページのみ）
-            initWeightTracker();
-            
-            // カテゴリーページ（筋トレ、英語学習、食事）の場合はタブを表示
+            // カテゴリーページ処理を並列化
             const categoryTabsDiv = document.getElementById('category-tabs');
             const categoryPages = ['筋トレ', '英語学習', '食事'];
             if (categoryPages.includes(page.title)) {
                 currentCategoryTitle = page.title;
                 categoryTabsDiv.classList.remove('hidden');
-                // デフォルトは詳細タブを表示
-                switchCategoryTab('detail', page.title);
+                promises.push(Promise.resolve().then(() => switchCategoryTab('detail', page.title)));
             } else {
                 currentCategoryTitle = null;
                 categoryTabsDiv.classList.add('hidden');
             }
             
+            // ===すぐにブロック描画開始（UI応答性向上） ===
             currentBlocks = (page.blocks || []).slice().sort((a, b) => a.position - b.position);
             renderBlocks(currentBlocks);
+            
+            // 残りの非同期処理を完了待ち（ブロック描画後）
+            await Promise.all(promises);
             
             document.getElementById('save-status').innerText = '保存済み';
         }
@@ -2082,6 +2120,10 @@
         function renderBlocks(blocks) {
             const container = document.getElementById('blocks');
             container.innerHTML = '';
+            
+            // === DocumentFragment を使用してDOMバッチ処理 ===
+            const fragment = document.createDocumentFragment();
+            
             blocks.forEach(block => {
                 const div = document.createElement('div');
                 div.className = 'block-row group flex items-start gap-2 py-1 relative hover:bg-gray-50 rounded px-2 transition';
@@ -2228,27 +2270,41 @@
                 }
                 const deleteBtn = `<button onclick="deleteBlock(${block.id})" class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded p-1 transition" title="削除">×</button>`;
                 div.innerHTML = handle + contentHtml + deleteBtn;
-                container.appendChild(div);
-                
-                // Textareaをレンダリング後に自動リサイズ
-                const textarea = div.querySelector('textarea');
-                if(textarea) {
-                    autoResizeTextarea(textarea);
-                }
-
-                if (block.type === 'calorie') {
-                    renderCalorieResult(block.id, parseBlockProps(block.props));
-                    if (typeof renderCalorieRows === 'function') {
-                        renderCalorieRows(block.id);
+                fragment.appendChild(div);
+            });
+            
+            // === DocumentFragment をまとめて追加（全ブロックが一度にDOMに反映） ===
+            container.appendChild(fragment);
+            
+            // === ポストレンダリング処理（スクロール後） ===
+            // textareaの自動リサイズやカロリー/本ブロックの初期化
+            requestAnimationFrame(() => {
+                const blockRows = container.querySelectorAll('.block-row');
+                blockRows.forEach(blockRow => {
+                    const blockId = parseInt(blockRow.dataset.id);
+                    const blockType = currentBlocks.find(b => b.id === blockId)?.type;
+                    
+                    // Textareaの自動リサイズ
+                    const textarea = blockRow.querySelector('textarea');
+                    if(textarea) {
+                        autoResizeTextarea(textarea);
                     }
-                } else if (block.type === 'book') {
-                    const bookProps = parseBlockProps(block.props);
-                    renderBookScrollPages(block.id, bookProps);
-                    updateBookDelta(block.id, bookProps);
-                } else if (block.type === 'speak') {
-                    // speak型の場合もtextareaの自動リサイズ
-                    const speakTextarea = div.querySelector('.block-textarea');
-                    if(speakTextarea) {
+
+                    if (blockType === 'calorie') {
+                        const block = currentBlocks.find(b => b.id === blockId);
+                        renderCalorieResult(blockId, parseBlockProps(block.props));
+                        if (typeof renderCalorieRows === 'function') {
+                            renderCalorieRows(blockId);
+                        }
+                    } else if (blockType === 'book') {
+                        const block = currentBlocks.find(b => b.id === blockId);
+                        const bookProps = parseBlockProps(block.props);
+                        renderBookScrollPages(blockId, bookProps);
+                        updateBookDelta(blockId, bookProps);
+                    }
+                });
+            });
+        }
                         autoResizeTextarea(speakTextarea);
                     }
                 }
