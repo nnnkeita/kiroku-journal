@@ -3374,6 +3374,10 @@
                 if (res.ok) {
                     const data = await res.json();
                     console.log(`[HealthPlanet] Sync successful: ${data.message}`);
+                    // === ページキャッシュを無効化（同期データ反映） ===
+                    if (currentPageId) {
+                        delete pageCache[currentPageId];
+                    }
                     // ページを再読み込みして、同期されたデータを表示
                     if (currentPageId) {
                         setTimeout(() => {
@@ -3383,8 +3387,10 @@
                                 currentBlocks = (page.blocks || []).slice().sort((a, b) => a.position - b.position);
                                 renderBlocks(currentBlocks);
                                 updateHealthplanetWeightDisplay(page.blocks || [], true);
+                                // === キャッシュを更新 ===
+                                pageCache[currentPageId] = page;
                             });
-                        }, 500); // 少し遅延させて、バックエンド側の処理を待つ
+                        }, 300); // 遅延を短縮（バックエンドは十分に高速）
                     }
                 } else {
                     const data = await res.json();
