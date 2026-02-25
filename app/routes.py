@@ -2500,6 +2500,104 @@ def register_routes(app):
         except Exception as e:
             return jsonify({'error': f'Error: {str(e)}'}), 500
 
+    # =====================================================
+    # 【システム管理エンドポイント】
+    # =====================================================
+    
+    @app.route('/api/system/status', methods=['GET'])
+    def get_system_status():
+        """システムの接続状況を確認"""
+        try:
+            status_info = {
+                'timestamp': datetime.now().isoformat(),
+                'app_name': 'Kiroku Journal',
+                'app_version': '1.0.0',
+                'environment': os.getenv('ENVIRONMENT', 'local'),
+                'database': {
+                    'connected': os.path.exists(DATABASE),
+                    'path': DATABASE,
+                    'size_mb': round(os.path.getsize(DATABASE) / (1024 * 1024), 2) if os.path.exists(DATABASE) else 0
+                },
+                'upload_folder': {
+                    'exists': os.path.exists(UPLOAD_FOLDER),
+                    'path': UPLOAD_FOLDER
+                },
+                'backup_folder': {
+                    'exists': os.path.exists(BACKUP_FOLDER),
+                    'path': BACKUP_FOLDER
+                },
+                'python_version': os.sys.version.split()[0],
+                'flask_app': 'Running',
+                'features': {
+                    'tts_enabled': os.getenv('TTS_ENABLED', '1') == '1',
+                    'calorie_enabled': os.getenv('CALORIE_ENABLED', '1') == '1',
+                    'auth_enabled': os.getenv('AUTH_ENABLED', '0') == '1'
+                }
+            }
+            
+            # ユーザー数を確認
+            try:
+                from .database import get_user_count
+                user_count = get_user_count()
+                status_info['users_count'] = user_count
+            except:
+                status_info['users_count'] = 'N/A'
+            
+            return jsonify(status_info), 200
+            
+        except Exception as e:
+            return jsonify({'error': f'System status check failed: {str(e)}'}), 500
+    
+    @app.route('/api/system/reload', methods=['POST'])
+    def reload_app():
+        """アプリケーションをリロード（PythonAnywhere用）"""
+        try:
+            # WSGI ファイルのタイムスタンプを更新してリロードトリガー
+            wsgi_path = os.path.join(PROJECT_ROOT, 'wsgi.py')
+            if os.path.exists(wsgi_path):
+                # ファイルを読み込み
+                with open(wsgi_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # タイムスタンプを更新
+                import re
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                content = re.sub(
+                    r'# WSGI VERSION:.*',
+                    f'# WSGI VERSION: {timestamp}',
+                    content
+                )
+                
+                # ファイルに書き込み
+                with open(wsgi_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': 'App reload triggered',
+                    'timestamp': timestamp,
+                    'wsgi_path': wsgi_path
+                }), 200
+            else:
+                return jsonify({'error': 'wsgi.py not found'}), 404
+                
+        except Exception as e:
+            return jsonify({'error': f'Reload failed: {str(e)}'}), 500
+    
+    @app.route('/api/system/health-check', methods=['GET'])
+    def health_check():
+        """ヘルスチェック（シンプル）"""
+        try:
+            # 最小限のチェック
+            db_ok = os.path.exists(DATABASE)
+            return jsonify({
+                'status': 'healthy' if db_ok else 'degraded',
+                'timestamp': datetime.now().isoformat(),
+                'database_ok': db_ok
+            }), 200 if db_ok else 503
+        except Exception as e:
+            return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
 
 def decode_wmo_code(code):
     """WMO天気コードを日本語の天気説明とアイコンに変換"""
