@@ -9,7 +9,7 @@
 
 このファイルは Flask アプリケーションの初期化とベースルートのみを管理します。
 """
-from flask import Flask, render_template, send_from_directory, request, redirect, session, url_for, jsonify
+from flask import Flask, render_template, send_from_directory, request, redirect, session, url_for, jsonify, make_response
 import os
 import sys
 import secrets
@@ -20,6 +20,14 @@ import stripe
 import subprocess
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
+try:
+    from flask_compress import Compress
+    COMPRESS_AVAILABLE = True
+except ImportError:
+    COMPRESS_AVAILABLE = False
+
+from functools import wraps, lru_cache
+from datetime import datetime, timedelta
 
 from .database import (
     init_db, get_or_create_inbox, get_or_create_finished, get_user_count, get_user_by_username, create_user,
@@ -63,6 +71,11 @@ SMTP_FROM = os.getenv('SMTP_FROM', SMTP_USER)
 # === Flask アプリケーション初期化 ===
 app = Flask(__name__, template_folder=TEMPLATE_FOLDER, static_folder=STATIC_FOLDER)
 
+# === パフォーマンス最適化 ===
+# gzip 圧縮を有効化
+if COMPRESS_AVAILABLE:
+    Compress(app)
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 secret = os.getenv('APP_SECRET')
@@ -70,6 +83,68 @@ if not secret:
     print('Warning: APP_SECRET is not set. Set APP_SECRET for production use.')
     secret = os.urandom(24)
 app.secret_key = secret
+
+# === キャッシュコントロール設定 ===
+# レスポンスキャッシュ（APIレスポンス用）
+_response_cache = {}
+_cache_timestamps = {}
+
+def cache_api_response(timeout_seconds=60):
+    """APIレスポンスをキャッシュするデコレータ"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            # キャッシュキーを生成
+            cache_key = f"{request.path}:{request.query_string.decode('utf-8')}"
+            
+            # キャッシュを確認
+            if cache_key in _response_cache:
+                cached_time = _cache_timestamps.get(cache_key, datetime.now())
+                if datetime.now() - cached_time < timedelta(seconds=timeout_seconds):
+                    # キャッシュが有効
+                    cached_response = _response_cache[cache_key]
+                    return cached_response
+            
+            # キャッシュなし、関数を実行
+            result = f(*args, **kwargs)
+            _response_cache[cache_key] = result
+            _cache_timestamps[cache_key] = datetime.now()
+            
+            # 古いキャッシュを削除（メモリ節約）
+            if len(_response_cache) > 100:
+                oldest_key = min(_cache_timestamps, key=_cache_timestamps.get)
+                del _response_cache[oldest_key]
+                del _cache_timestamps[oldest_key]
+            
+            return result
+        return decorated_function
+    return decorator
+
+@app.after_request
+def set_cache_headers(response):
+    """キャッシュコントロールヘッダーを設定"""
+    if request.path.startswith('/static/'):
+        # 静的ファイル: 1年キャッシュ
+        response.cache_control.max_age = 31536000
+        response.cache_control.public = True
+    elif request.path.endswith('.html') or request.path == '/':
+        # HTMLファイル: キャッシュなし（常に最新を取得）
+        response.cache_control.max_age = 0
+        response.cache_control.no_cache = True
+        response.cache_control.no_store = True
+    else:
+        # APIエンドポイント: 短期キャッシュ（5分）
+        response.cache_control.max_age = 300
+        response.cache_control.public = True
+    
+    # gzip 圧縮の有効化確認
+    if 'gzip' not in response.headers.get('Content-Encoding', ''):
+        response.headers['Vary'] = 'Accept-Encoding'
+    
+    # DNSプリフェッチの設定
+    response.headers['X-UA-Compatible'] = 'IE=edge'
+    
+    return response
 
 # === バージョン情報（ブラウザキャッシュバイパス用） ===
 def get_app_version():

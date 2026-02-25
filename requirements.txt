@@ -2,3 +2,4 @@ flask
 werkzeug
 stripe
 python-dotenv
+Flask-Compress
