@@ -373,6 +373,16 @@ def privacy():
 def tokusho():
     return render_template('tokusho.html')
 
+@app.route('/tokutei.html')
+def tokutei_html():
+    """Stripe 審査対応: 特定商取引法ページ（.html形式）"""
+    return send_from_directory(STATIC_FOLDER, 'tokutei.html')
+
+@app.route('/tokutei')
+def tokutei():
+    """特定商取引法ページ"""
+    return send_from_directory(STATIC_FOLDER, 'tokutei.html')
+
 @app.route('/billing')
 def billing():
     user = get_user_by_id(session.get('user_id')) if session.get('user_id') else None
