@@ -495,6 +495,12 @@
                     <div id="weather-info" class="flex items-center gap-2 text-sm text-gray-600">
                         <!-- 天気情報がここに表示される -->
                     </div>
+                    <div id="body-age-info" class="flex items-center gap-2 text-sm text-gray-600">
+                        <!-- 体内年齢情報がここに表示される -->
+                    </div>
+                    <div id="body-weight-info" class="flex items-center gap-2 text-sm text-gray-600">
+                        <!-- 体重情報がここに表示される -->
+                    </div>
                 </div>
 
                 <!-- 感情トラッカー（ムードセレクタ） -->
@@ -977,6 +983,12 @@
                 
                 // 天気情報を取得して表示
                 fetchAndDisplayWeather(year, month, day);
+                
+                // 体内年齢情報を取得して表示
+                fetchAndDisplayBodyAge(year, month, day);
+                
+                // 体重情報を取得して表示
+                fetchAndDisplayBodyWeight(year, month, day);
             } else {
                 dateNav.classList.add('hidden');
             }
@@ -1006,6 +1018,64 @@
             } catch (error) {
                 console.warn('Failed to fetch weather:', error);
                 document.getElementById('weather-info').innerHTML = '';
+            }
+        }
+
+        async function fetchAndDisplayBodyAge(year, month, day) {
+            try {
+                const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const response = await fetch(`/api/healthplanet/body-age/${dateStr}`);
+                
+                if (!response.ok) {
+                    // 体内年齢データが見つからない場合は何も表示しない
+                    document.getElementById('body-age-info').innerHTML = '';
+                    return;
+                }
+                
+                const data = await response.json();
+                const bodyAgeInfo = document.getElementById('body-age-info');
+                
+                if (data.body_age !== null && data.body_age !== undefined) {
+                    bodyAgeInfo.innerHTML = `
+                        <span style="font-size: 0.875rem; color: #999;">•</span>
+                        <span class="text-lg">🫀</span>
+                        <span class="text-gray-600">体内年齢: <strong>${data.body_age}才</strong></span>
+                    `;
+                } else {
+                    bodyAgeInfo.innerHTML = '';
+                }
+            } catch (error) {
+                console.warn('Failed to fetch body age:', error);
+                document.getElementById('body-age-info').innerHTML = '';
+            }
+        }
+
+        async function fetchAndDisplayBodyWeight(year, month, day) {
+            try {
+                const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const response = await fetch(`/api/healthplanet/body-weight/${dateStr}`);
+                
+                if (!response.ok) {
+                    // 体重データが見つからない場合は何も表示しない
+                    document.getElementById('body-weight-info').innerHTML = '';
+                    return;
+                }
+                
+                const data = await response.json();
+                const bodyWeightInfo = document.getElementById('body-weight-info');
+                
+                if (data.weight !== null && data.weight !== undefined) {
+                    bodyWeightInfo.innerHTML = `
+                        <span style="font-size: 0.875rem; color: #999;">•</span>
+                        <span class="text-lg">⚖️</span>
+                        <span class="text-gray-600">体重: <strong>${data.weight.toFixed(1)}kg</strong></span>
+                    `;
+                } else {
+                    bodyWeightInfo.innerHTML = '';
+                }
+            } catch (error) {
+                console.warn('Failed to fetch body weight:', error);
+                document.getElementById('body-weight-info').innerHTML = '';
             }
         }
 
@@ -2135,7 +2205,6 @@
         
         function renderBlocks(blocks) {
             const container = document.getElementById('blocks');
-            container.innerHTML = '';
             
             // === DocumentFragment を使用してDOMバッチ処理 ===
             const fragment = document.createDocumentFragment();
@@ -2290,6 +2359,8 @@
             });
             
             // === DocumentFragment をまとめて追加（全ブロックが一度にDOMに反映） ===
+            // 新しいコンテンツが準備完了してから、既存コンテンツをリセット
+            container.innerHTML = '';
             container.appendChild(fragment);
             
             // === ポストレンダリング処理（スクロール後） ===
