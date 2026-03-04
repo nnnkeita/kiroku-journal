@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>kiroku journal-日記アプリ-</title>
+    <title>kioku journal-日記アプリ-</title>
     
     <!-- DNS Prefetch & Preconnect -->
     <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
@@ -368,7 +368,7 @@
 
     <div class="w-72 bg-gray-50 border-r border-gray-200 flex flex-col h-full flex-shrink-0" id="sidebar">
         <div class="p-4 flex justify-between items-center">
-            <h1 class="font-bold text-gray-600 truncate">kiroku journal-日記アプリ-</h1>
+            <h1 class="font-bold text-gray-600 truncate">kioku journal-日記アプリ-</h1>
             <button onclick="openSearch()" class="text-gray-400 hover:text-gray-600" title="検索">🔍</button>
         </div>
         
@@ -984,11 +984,8 @@
                 // 天気情報を取得して表示
                 fetchAndDisplayWeather(year, month, day);
                 
-                // 体内年齢情報を取得して表示
-                fetchAndDisplayBodyAge(year, month, day);
-                
-                // 体重情報を取得して表示
-                fetchAndDisplayBodyWeight(year, month, day);
+                // Health Planet データは syncHealthPlanetForDate で自動同期・表示されるため、
+                // ここでの個別エンドポイント呼び出しは不要
             } else {
                 dateNav.classList.add('hidden');
             }
@@ -1081,36 +1078,56 @@
 
         function extractHealthplanetData(blocks) {
             // 全Health Planetデータを抽出
-            if (!Array.isArray(blocks)) return '';
+            console.log('[extractHealthplanetData] Input blocks:', blocks);
+            if (!Array.isArray(blocks)) {
+                console.log('[extractHealthplanetData] blocks is not an array');
+                return '';
+            }
+            
+            // Health Planet ブロック（source === 'healthplanet'）を検索
             const hpBlock = blocks.find(block => {
                 const props = parseBlockProps(block?.props) || {};
+                console.log('[extractHealthplanetData] Checking block:', block.id, 'source:', props.source);
                 return props.source === 'healthplanet';
             });
-            let content = hpBlock?.content || '';
-            if (!content) {
-                const fallback = blocks.find(block => (block?.content || '').includes('体重'));
-                content = fallback?.content || '';
+            
+            if (hpBlock) {
+                console.log('[extractHealthplanetData] Found Health Planet block:', hpBlock.content);
+                return hpBlock.content || '';
             }
-            return content;
+            
+            console.log('[extractHealthplanetData] No Health Planet block found');
+            return '';
         }
 
         function updateHealthplanetDataDisplay(blocks, isDatePage) {
             const dataEl = document.getElementById('healthplanet-weight');
-            if (!dataEl) return;
+            if (!dataEl) {
+                console.log('[updateHealthplanetDataDisplay] Element not found');
+                return;
+            }
+            
+            console.log('[updateHealthplanetDataDisplay] isDatePage:', isDatePage, 'blocks:', blocks);
+            
             if (!isDatePage) {
                 dataEl.innerText = '';
                 dataEl.classList.add('hidden');
                 return;
             }
+            
             const data = extractHealthplanetData(blocks);
+            console.log('[updateHealthplanetDataDisplay] Extracted data:', data);
+            
             if (!data) {
                 dataEl.innerText = '';
                 dataEl.classList.add('hidden');
                 return;
             }
+            
             // === 全情報を表示（体重、体脂肪、筋肉量など） ===
             dataEl.innerText = data;
             dataEl.classList.remove('hidden');
+            console.log('[updateHealthplanetDataDisplay] Updated UI with:', data);
         }
 
         // --- 感情トラッカー機能 ---
@@ -3458,26 +3475,35 @@
                     body: JSON.stringify({ date: dateStr })
                 });
                 
+                console.log(`[HealthPlanet] Sync response status: ${res.status}`);
+                
                 if (res.ok) {
                     const data = await res.json();
                     console.log(`[HealthPlanet] Sync successful: ${data.message}`);
+                    
                     // === ページキャッシュを無効化（同期データ反映） ===
                     if (currentPageId) {
                         delete pageCache[currentPageId];
-                    }
-                    // ページを再読み込みして、同期されたデータを表示
-                    if (currentPageId) {
-                        setTimeout(() => {
-                            fetchPages(); // サイドバーを更新
-                            const res2 = fetch(`/api/pages/${currentPageId}`);
-                            res2.then(r => r.json()).then(page => {
-                                currentBlocks = (page.blocks || []).slice().sort((a, b) => a.position - b.position);
-                                renderBlocks(currentBlocks);
-                                updateHealthplanetDataDisplay(page.blocks || [], true);
-                                // === キャッシュを更新 ===
-                                pageCache[currentPageId] = page;
-                            });
-                        }, 300); // 遅延を短縮（バックエンドは十分に高速）
+                        console.log(`[HealthPlanet] Cleared cache for page ${currentPageId}`);
+                        
+                        // ページを再読み込みして、同期されたデータを表示
+                        console.log(`[HealthPlanet] Reloading page data...`);
+                        const res2 = await fetch(`/api/pages/${currentPageId}`);
+                        const page = await res2.json();
+                        
+                        console.log(`[HealthPlanet] Fetched page with ${page.blocks?.length || 0} blocks`);
+                        console.log(`[HealthPlanet] Blocks:`, page.blocks);
+                        
+                        // ブロックを再描画
+                        currentBlocks = (page.blocks || []).slice().sort((a, b) => a.position - b.position);
+                        renderBlocks(currentBlocks);
+                        
+                        // ナビゲーションバーを更新
+                        updateHealthplanetDataDisplay(page.blocks || [], true);
+                        console.log(`[HealthPlanet] Updated health data display`);
+                        
+                        // キャッシュを更新
+                        pageCache[currentPageId] = page;
                     }
                 } else {
                     const data = await res.json();
