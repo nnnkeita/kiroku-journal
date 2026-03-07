@@ -199,8 +199,9 @@ try:
 
     from app.flask_app import app
     with app.app_context():
-        from app.database import init_db
+        from app.database import init_db, migrate_healthplanet_blocks_to_columns
         init_db()
+        migrate_healthplanet_blocks_to_columns()
 
     application = app
     

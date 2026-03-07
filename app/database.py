@@ -573,6 +573,57 @@ def get_or_create_finished():
     return dict(finished) if finished else None
 
 
+def migrate_healthplanet_blocks_to_columns():
+    """既存のHealthPlanetブロックから体重・体脂肪率をpagesカラムへ移行"""
+    import re
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # body_fatカラムが存在しない場合は追加
+    try:
+        cursor.execute("ALTER TABLE pages ADD COLUMN body_fat REAL DEFAULT NULL")
+        conn.commit()
+    except Exception:
+        pass
+
+    # healthplanetブロックを持つページを全取得
+    cursor.execute('''
+        SELECT b.page_id, b.content
+        FROM blocks b
+        WHERE b.props LIKE '%healthplanet%' AND b.content != ''
+    ''')
+    rows = cursor.fetchall()
+
+    updated = 0
+    for row in rows:
+        content = row['content'] or ''
+        weight_match = re.search(r'体重\s*([\d.]+)kg', content)
+        fat_match = re.search(r'体脂肪率\s*([\d.]+)%', content)
+        if not weight_match and not fat_match:
+            continue
+        weight = float(weight_match.group(1)) if weight_match else None
+        body_fat = float(fat_match.group(1)) if fat_match else None
+
+        # 既にデータがあるページはスキップ
+        cursor.execute('SELECT weight, body_fat FROM pages WHERE id = ?', (row['page_id'],))
+        page = cursor.fetchone()
+        if not page:
+            continue
+        if page['weight'] is not None and page['body_fat'] is not None:
+            continue
+
+        cursor.execute(
+            'UPDATE pages SET weight = COALESCE(weight, ?), body_fat = COALESCE(body_fat, ?) WHERE id = ?',
+            (weight, body_fat, row['page_id'])
+        )
+        updated += 1
+
+    if updated > 0:
+        conn.commit()
+    conn.close()
+    return updated
+
+
 def archive_old_diary_pages():
     """3日以上前の日付ページ（YYYY年M月D日）をルートから'📚 過去の日記'フォルダへ自動移動"""
     import re
