@@ -575,13 +575,15 @@ def archive_old_diary_pages():
     conn = get_db()
     cursor = conn.cursor()
 
-    # 過去の日記フォルダを取得（既存名バリエーションを全て検索）
+    # 過去の日記フォルダを全て取得（名前バリエーション対応）
     cursor.execute(
-        "SELECT * FROM pages WHERE title IN (?, ?, ?) AND parent_id IS NULL AND is_deleted = 0 ORDER BY id LIMIT 1",
+        "SELECT * FROM pages WHERE title IN (?, ?, ?) AND parent_id IS NULL AND is_deleted = 0 ORDER BY id",
         ('過去の日記', '📚 過去の日記', '📁 過去の日記')
     )
-    folder = cursor.fetchone()
-    if not folder:
+    all_folders = cursor.fetchall()
+
+    if not all_folders:
+        # フォルダが1つもなければ新規作成
         cursor.execute('SELECT MIN(position) FROM pages WHERE parent_id IS NULL AND is_deleted = 0')
         min_pos = cursor.fetchone()[0]
         new_pos = (min_pos if min_pos is not None else 0) - 1000.0
@@ -596,7 +598,30 @@ def archive_old_diary_pages():
         )
         conn.commit()
     else:
-        folder_id = folder['id']
+        # 最も古い（id最小）フォルダを正フォルダとして残し、残りを統合
+        folder_id = all_folders[0]['id']
+        for dup in all_folders[1:]:
+            dup_id = dup['id']
+            # 重複フォルダの子を正フォルダへ移動
+            cursor.execute(
+                'SELECT MAX(position) FROM pages WHERE parent_id = ? AND is_deleted = 0',
+                (folder_id,)
+            )
+            max_pos = cursor.fetchone()[0]
+            next_pos = (max_pos if max_pos is not None else 0) + 1000.0
+            cursor.execute(
+                'SELECT id FROM pages WHERE parent_id = ? AND is_deleted = 0 ORDER BY position',
+                (dup_id,)
+            )
+            for child in cursor.fetchall():
+                cursor.execute(
+                    'UPDATE pages SET parent_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                    (folder_id, next_pos, child['id'])
+                )
+                next_pos += 1000.0
+            # 重複フォルダを削除
+            cursor.execute('UPDATE pages SET is_deleted = 1 WHERE id = ?', (dup_id,))
+        conn.commit()
 
     # 3日前以前の日付を閾値とする
     threshold = (datetime.now().date() - timedelta(days=3))

@@ -506,17 +506,12 @@
                 <!-- 感情トラッカー（ムードセレクタ） -->
                 <div id="mood-tracker" class="hidden mb-6 flex items-center gap-2 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100">
                     <span class="text-sm font-semibold text-gray-600">今日の気分:</span>
-                    <div id="mood-selector" class="flex gap-1">
-                        <button class="mood-btn text-2xl hover:scale-125 transition" data-mood="10" title="最高！🤩">🤩</button>
-                        <button class="mood-btn text-2xl hover:scale-125 transition" data-mood="9" title="😃">😃</button>
-                        <button class="mood-btn text-2xl hover:scale-125 transition" data-mood="8" title="😄">😄</button>
-                        <button class="mood-btn text-2xl hover:scale-125 transition" data-mood="7" title="😊">😊</button>
-                        <button class="mood-btn text-2xl hover:scale-125 transition" data-mood="6" title="🙂">🙂</button>
-                        <button class="mood-btn text-2xl hover:scale-125 transition" data-mood="5" title="普通😐">😐</button>
-                        <button class="mood-btn text-2xl hover:scale-125 transition" data-mood="4" title="😟">😟</button>
-                        <button class="mood-btn text-2xl hover:scale-125 transition" data-mood="3" title="😞">😞</button>
-                        <button class="mood-btn text-2xl hover:scale-125 transition" data-mood="2" title="😢">😢</button>
-                        <button class="mood-btn text-2xl hover:scale-125 transition" data-mood="1" title="最悪😭">😭</button>
+                    <div id="mood-selector" class="flex gap-2">
+                        <button class="mood-btn text-lg font-bold w-9 h-9 rounded-full border-2 border-gray-300 hover:border-purple-400 transition" data-mood="1" title="最悪">1</button>
+                        <button class="mood-btn text-lg font-bold w-9 h-9 rounded-full border-2 border-gray-300 hover:border-purple-400 transition" data-mood="2" title="悪い">2</button>
+                        <button class="mood-btn text-lg font-bold w-9 h-9 rounded-full border-2 border-gray-300 hover:border-purple-400 transition" data-mood="3" title="普通">3</button>
+                        <button class="mood-btn text-lg font-bold w-9 h-9 rounded-full border-2 border-gray-300 hover:border-purple-400 transition" data-mood="4" title="良い">4</button>
+                        <button class="mood-btn text-lg font-bold w-9 h-9 rounded-full border-2 border-gray-300 hover:border-purple-400 transition" data-mood="5" title="最高！">5</button>
                     </div>
                     <div id="mood-display" class="ml-auto text-sm text-gray-500"></div>
                 </div>
@@ -1151,20 +1146,19 @@
         function updateMoodUI(mood) {
             const moodBtns = document.querySelectorAll('.mood-btn');
             const moodDisplay = document.getElementById('mood-display');
-            const moods = ['😢', '😟', '😐', '😊', '😄'];
             const moodTexts = ['最悪', '悪い', '普通', '良い', '最高！'];
-            
+
             moodBtns.forEach(btn => {
                 const btnMood = parseInt(btn.dataset.mood);
                 if (btnMood === mood) {
-                    btn.classList.add('ring-2', 'ring-purple-500', 'scale-110');
+                    btn.classList.add('ring-2', 'ring-purple-500', 'scale-110', 'bg-purple-100');
                 } else {
-                    btn.classList.remove('ring-2', 'ring-purple-500', 'scale-110');
+                    btn.classList.remove('ring-2', 'ring-purple-500', 'scale-110', 'bg-purple-100');
                 }
             });
-            
+
             if (mood > 0 && mood <= 5) {
-                moodDisplay.innerHTML = `${moods[mood - 1]} ${moodTexts[mood - 1]}`;
+                moodDisplay.innerHTML = `<span class="font-bold text-purple-600">${mood}</span> ${moodTexts[mood - 1]}`;
             } else {
                 moodDisplay.innerHTML = '';
             }
