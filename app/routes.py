@@ -21,7 +21,8 @@ from werkzeug.utils import secure_filename
 from .database import (
     get_db, get_next_position, get_block_next_position,
     mark_tree_deleted, hard_delete_tree,
-    save_healthplanet_token, get_healthplanet_token, clear_healthplanet_token
+    save_healthplanet_token, get_healthplanet_token, clear_healthplanet_token,
+    archive_old_diary_pages
 )
 from .utils import (
     allowed_file, estimate_calories, estimate_calories_items, export_page_to_dict,
@@ -77,8 +78,28 @@ def register_routes(app):
         }
         url = 'https://www.healthplanet.jp/status/innerscan.json?' + urllib.parse.urlencode(params)
         req = urllib.request.Request(url, method='GET')
-        with _healthplanet_urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read().decode('utf-8'))
+        print(f"[DEBUG] Health Planet API Request URL: {url}")
+        try:
+            with _healthplanet_urlopen(req, timeout=30) as resp:
+                status_code = resp.status
+                print(f"[DEBUG] Health Planet API Response Status: {status_code}")
+                resp_text = resp.read().decode('utf-8')
+                print(f"[DEBUG] Health Planet API Response Body: {resp_text[:500]}")
+                data = json.loads(resp_text)
+                print(f"[DEBUG] Health Planet API Parsed Data: {data}")
+                return data
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8', errors='ignore')
+            print(f"[ERROR] HTTP Error: {e.code}")
+            print(f"[ERROR] Response Body: {error_body[:500]}")
+            raise Exception(f"Health Planet HTTP Error {e.code}")
+        except json.JSONDecodeError as e:
+            print(f"[ERROR] JSON Parse Error: {e}")
+            print(f"[ERROR] Response was: {resp_text[:200] if 'resp_text' in locals() else 'unknown'}")
+            raise Exception(f"Invalid JSON response")
+        except Exception as e:
+            print(f"[ERROR] Health Planet Request Failed: {e}")
+            raise
 
     def _format_healthplanet_line(measurements):
         """Health Planetのすべての測定項目をフォーマット"""
@@ -198,11 +219,18 @@ def register_routes(app):
         try:
             # === Health Planetから全測定項目を取得 ===
             all_tags = ['6021', '6022', '6023', '6024', '6025', '6026', '6027', '6028', '6029']
-            data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, all_tags)
-            print(f"[DEBUG] Fetched Data: {data}")
+            try:
+                data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, all_tags)
+                print(f"[DEBUG] Fetched Data with all tags: {data}")
+            except Exception as e1:
+                print(f"[WARN] Failed to fetch all tags, trying core tags only: {e1}")
+                # フォールバック：コアタグだけで試す
+                core_tags = ['6021', '6022']
+                data = _fetch_healthplanet_innerscan(access_token, from_str, to_str, core_tags)
+                print(f"[DEBUG] Fetched Data with core tags: {data}")
         except Exception as e:
             print(f"[ERROR] Fetch HealthPlanet Data Failed: {e}")
-            return False, 'HealthPlanetの取得に失敗しました。'
+            return False, f'Health Planetの取得に失敗しました: {str(e)[:100]}'
 
         measurements = {}
         for entry in data.get('data', []) if isinstance(data, dict) else []:
@@ -228,9 +256,14 @@ def register_routes(app):
             try:
                 # === 過去90日分から全タグを取得 ===
                 all_tags = ['6021', '6022', '6023', '6024', '6025', '6026', '6027', '6028', '6029']
-                data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, all_tags)
-            except Exception:
-                return False, 'HealthPlanetの取得に失敗しました。'
+                try:
+                    data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, all_tags)
+                except Exception as e1:
+                    print(f"[WARN] Failed to fetch all tags (90day), trying core tags only: {e1}")
+                    core_tags = ['6021', '6022']
+                    data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, core_tags)
+            except Exception as e:
+                return False, f'Health Planetの取得に失敗しました（90日フォールバック）: {str(e)[:100]}'
             measurements = {}
             for entry in data.get('data', []) if isinstance(data, dict) else []:
                 tag = str(entry.get('tag', ''))
@@ -407,12 +440,15 @@ def register_routes(app):
 
     @app.route('/api/pages', methods=['GET'])
     def get_pages():
+        # 3日以上前の日記ページを自動アーカイブ
+        archive_old_diary_pages()
+
         conn = get_db()
         cursor = conn.cursor()
         # インデックスを活用して高速化
         cursor.execute('''
-            SELECT * FROM pages 
-            WHERE is_deleted = 0 
+            SELECT * FROM pages
+            WHERE is_deleted = 0
             ORDER BY parent_id, position
         ''')
         all_pages = [dict(row) for row in cursor.fetchall()]

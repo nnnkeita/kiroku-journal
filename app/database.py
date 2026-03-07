@@ -565,3 +565,77 @@ def get_or_create_finished():
 
     conn.close()
     return dict(finished) if finished else None
+
+
+def archive_old_diary_pages():
+    """3日以上前の日付ページ（YYYY年M月D日）をルートから'📚 過去の日記'フォルダへ自動移動"""
+    import re
+    from datetime import datetime, timedelta
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # 過去の日記フォルダを取得または作成
+    cursor.execute(
+        'SELECT * FROM pages WHERE title = ? AND parent_id IS NULL AND is_deleted = 0 LIMIT 1',
+        ('📚 過去の日記',)
+    )
+    folder = cursor.fetchone()
+    if not folder:
+        cursor.execute('SELECT MIN(position) FROM pages WHERE parent_id IS NULL AND is_deleted = 0')
+        min_pos = cursor.fetchone()[0]
+        new_pos = (min_pos if min_pos is not None else 0) - 1000.0
+        cursor.execute(
+            'INSERT INTO pages (title, icon, parent_id, position) VALUES (?, ?, ?, ?)',
+            ('📚 過去の日記', '📚', None, new_pos)
+        )
+        folder_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO blocks (page_id, type, content, position) VALUES (?, 'text', '', ?)",
+            (folder_id, 1000.0)
+        )
+        conn.commit()
+    else:
+        folder_id = folder['id']
+
+    # 3日前以前の日付を閾値とする
+    threshold = (datetime.now().date() - timedelta(days=3))
+
+    # ルートレベル（parent_id IS NULL）の日付形式ページを検索
+    cursor.execute(
+        'SELECT * FROM pages WHERE parent_id IS NULL AND is_deleted = 0'
+    )
+    root_pages = cursor.fetchall()
+
+    date_pattern = re.compile(r'^(\d{4})年(\d{1,2})月(\d{1,2})日$')
+    archived_count = 0
+
+    for page in root_pages:
+        match = date_pattern.match(page['title'])
+        if not match:
+            continue
+        try:
+            page_date = datetime(
+                int(match.group(1)), int(match.group(2)), int(match.group(3))
+            ).date()
+        except ValueError:
+            continue
+
+        if page_date <= threshold:
+            cursor.execute(
+                'SELECT MAX(position) FROM pages WHERE parent_id = ? AND is_deleted = 0',
+                (folder_id,)
+            )
+            max_pos = cursor.fetchone()[0]
+            new_pos = (max_pos if max_pos is not None else 0) + 1000.0
+            cursor.execute(
+                'UPDATE pages SET parent_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                (folder_id, new_pos, page['id'])
+            )
+            archived_count += 1
+
+    if archived_count > 0:
+        conn.commit()
+
+    conn.close()
+    return archived_count
