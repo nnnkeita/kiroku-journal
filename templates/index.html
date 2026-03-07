@@ -1175,19 +1175,17 @@
             const element = document.querySelector(`.weather-info[data-page-id="${pageId}"]`);
             if (!element) return;
 
-            const moodEmojis = ['😢', '😟', '😐', '😊', '😄'];
-            const moodEmoji = mood > 0 && mood <= 5 ? moodEmojis[mood - 1] : '';
+            const moodNum = (mood > 0) ? String(mood) : '';
             element.dataset.mood = String(mood || 0);
 
             const currentText = (element.textContent || '').trim();
-            const weatherPart = currentText.replace(/^[😢😟😐😊😄]\s*/u, '').trim();
-            const nextText = moodEmoji ? (weatherPart ? `${moodEmoji} ${weatherPart}` : moodEmoji) : weatherPart;
+            const weatherPart = currentText.replace(/^\d+\s*/u, '').trim();
+            const nextText = moodNum ? (weatherPart ? `${moodNum} ${weatherPart}` : moodNum) : weatherPart;
 
             element.textContent = nextText;
 
-            if (moodEmoji) {
-                const moodTitles = ['最悪', '悪い', '普通', '良い', '最高！'];
-                const moodTitle = `気分: ${moodEmoji} ${moodTitles[mood - 1]}`;
+            if (moodNum) {
+                const moodTitle = `気分: ${moodNum}`;
                 const existingTitle = element.title || '';
                 const weatherTitle = existingTitle.replace(/^気分:.*?(?:\s\/\s)?/u, '').trim();
                 element.title = weatherTitle ? `${moodTitle} / ${weatherTitle}` : moodTitle;
@@ -1310,14 +1308,12 @@
                             let html = '';
                             let title = '';
                             
-                            // 気分の顔文字
+                            // 気分の数字
                             const fallbackMood = parseInt(element.dataset.mood || '0');
                             const moodValue = page?.mood || fallbackMood;
                             if (moodValue) {
-                                const moods = ['😢', '😟', '😐', '😊', '😄'];
-                                const moodEmoji = moods[moodValue - 1] || '';
-                                html += moodEmoji;
-                                title += `気分: ${moodEmoji}`;
+                                html += String(moodValue);
+                                title += `気分: ${moodValue}`;
                             }
                             
                             // 天気情報
@@ -1739,18 +1735,15 @@
                 };
 
                 const isDatePage = (page.title || '').match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
-                const moodEmojis = ['😢', '😟', '😐', '😊', '😄'];
                 const moodValue = isDatePage && page.mood ? page.mood : 0;
-                const moodEmoji = moodValue ? (moodEmojis[moodValue - 1] || '') : '';
-                const moodTitle = moodValue
-                    ? `気分: ${moodEmoji} ${['最悪', '悪い', '普通', '良い', '最高！'][moodValue - 1]}`
-                    : '';
+                const moodNum = moodValue ? String(moodValue) : '';
+                const moodTitle = moodValue ? `気分: ${moodValue}` : '';
 
                 row.innerHTML = `
                     ${toggleBtn}
                     <span class="mr-2 opacity-70">${page.icon}</span>
                     <span class="truncate flex-1">${page.title || '無題'}</span>
-                    <span class="weather-info text-xs text-gray-400 ml-auto pl-2 min-w-max" data-page-id="${page.id}" data-page-title="${page.title || ''}" data-mood="${moodValue}" title="${moodTitle}">${moodEmoji}</span>
+                    <span class="weather-info text-xs text-gray-400 ml-auto pl-2 min-w-max" data-page-id="${page.id}" data-page-title="${page.title || ''}" data-mood="${moodValue}" title="${moodTitle}">${moodNum}</span>
                 `;
                 wrapper.appendChild(row);
 

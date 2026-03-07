@@ -575,10 +575,10 @@ def archive_old_diary_pages():
     conn = get_db()
     cursor = conn.cursor()
 
-    # 過去の日記フォルダを取得または作成
+    # 過去の日記フォルダを取得（既存名バリエーションを全て検索）
     cursor.execute(
-        'SELECT * FROM pages WHERE title = ? AND parent_id IS NULL AND is_deleted = 0 LIMIT 1',
-        ('📚 過去の日記',)
+        "SELECT * FROM pages WHERE title IN (?, ?, ?) AND parent_id IS NULL AND is_deleted = 0 ORDER BY id LIMIT 1",
+        ('過去の日記', '📚 過去の日記', '📁 過去の日記')
     )
     folder = cursor.fetchone()
     if not folder:
@@ -587,7 +587,7 @@ def archive_old_diary_pages():
         new_pos = (min_pos if min_pos is not None else 0) - 1000.0
         cursor.execute(
             'INSERT INTO pages (title, icon, parent_id, position) VALUES (?, ?, ?, ?)',
-            ('📚 過去の日記', '📚', None, new_pos)
+            ('過去の日記', '📁', None, new_pos)
         )
         folder_id = cursor.lastrowid
         cursor.execute(
