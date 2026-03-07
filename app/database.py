@@ -104,6 +104,12 @@ def init_db():
         cursor.execute("ALTER TABLE pages ADD COLUMN weight_at TEXT DEFAULT NULL")
     except sqlite3.OperationalError:
         pass
+
+    # 体脂肪率カラムを追加
+    try:
+        cursor.execute("ALTER TABLE pages ADD COLUMN body_fat REAL DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass
     
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS blocks (

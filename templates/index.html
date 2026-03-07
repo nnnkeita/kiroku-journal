@@ -506,6 +506,7 @@
                 <!-- 感情トラッカー（ムードセレクタ） -->
                 <div id="mood-tracker" class="hidden mb-6 flex items-center gap-2 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100">
                     <span class="text-sm font-semibold text-gray-600">今日の気分:</span>
+                    <span class="text-xs text-red-400 font-medium">最悪</span>
                     <div id="mood-selector" class="flex gap-2">
                         <button class="mood-btn text-lg font-bold w-9 h-9 rounded-full border-2 border-gray-300 hover:border-purple-400 transition" data-mood="1" title="最悪">1</button>
                         <button class="mood-btn text-lg font-bold w-9 h-9 rounded-full border-2 border-gray-300 hover:border-purple-400 transition" data-mood="2" title="悪い">2</button>
@@ -513,6 +514,7 @@
                         <button class="mood-btn text-lg font-bold w-9 h-9 rounded-full border-2 border-gray-300 hover:border-purple-400 transition" data-mood="4" title="良い">4</button>
                         <button class="mood-btn text-lg font-bold w-9 h-9 rounded-full border-2 border-gray-300 hover:border-purple-400 transition" data-mood="5" title="最高！">5</button>
                     </div>
+                    <span class="text-xs text-green-500 font-medium">最高</span>
                     <div id="mood-display" class="ml-auto text-sm text-gray-500"></div>
                 </div>
                 
@@ -1316,6 +1318,18 @@
                                 html += `${weather.weather_icon} ${Math.round(weather.temp_max)}°`;
                                 if (title) title += ' / ';
                                 title += `${Math.round(weather.temp_max)}°C / ${Math.round(weather.temp_min)}°C`;
+                            }
+
+                            // 体重・体脂肪率
+                            if (page?.weight) {
+                                if (html) html += ' ';
+                                html += `${page.weight}kg`;
+                                if (title) title += ' / ';
+                                title += `体重: ${page.weight}kg`;
+                            }
+                            if (page?.body_fat) {
+                                html += ` ${page.body_fat}%`;
+                                title += ` 体脂肪: ${page.body_fat}%`;
                             }
                             
                             if (html) {

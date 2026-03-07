@@ -294,6 +294,25 @@ def register_routes(app):
             conn.close()
             return False, '日付ページの作成に失敗しました。'
         _upsert_healthplanet_block(cursor, page['id'], content)
+
+        # 体重・体脂肪率をpagesカラムに保存
+        weight_val = latest_values.get('6021')
+        body_fat_val = latest_values.get('6022')
+        try:
+            weight_float = float(weight_val) if weight_val else None
+        except (ValueError, TypeError):
+            weight_float = None
+        try:
+            body_fat_float = float(body_fat_val) if body_fat_val else None
+        except (ValueError, TypeError):
+            body_fat_float = None
+        if weight_float is not None or body_fat_float is not None:
+            now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+            cursor.execute(
+                'UPDATE pages SET weight = ?, body_fat = ?, weight_at = ? WHERE id = ?',
+                (weight_float, body_fat_float, now, page['id'])
+            )
+
         conn.commit()
         conn.close()
         return True, '同期しました。'
@@ -1728,37 +1747,42 @@ def register_routes(app):
                 return jsonify({'error': '無効なレスポンス形式です'}), 400
             
             weight = None
+            body_fat = None
             for entry in hp_data.get('data', []):
                 tag = str(entry.get('tag', ''))
                 keydata = entry.get('keydata', '')
-                if tag == '6021' and keydata:
+                if tag == '6021' and keydata and weight is None:
                     try:
                         weight = float(keydata)
-                        break
                     except (ValueError, TypeError):
-                        continue
-            
+                        pass
+                elif tag == '6022' and keydata and body_fat is None:
+                    try:
+                        body_fat = float(keydata)
+                    except (ValueError, TypeError):
+                        pass
+
             if weight is None:
                 return jsonify({
                     'error': f'{target_date} に体重データが見つかりません',
                     'detail': 'この日付の計測記録がない可能性があります'
                 }), 404
-            
+
             # ページに保存
             conn = get_db()
             cursor = conn.cursor()
-            
+
             now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute(
-                'UPDATE pages SET weight = ?, weight_at = ? WHERE id = ?',
-                (weight, now, page_id)
+                'UPDATE pages SET weight = ?, body_fat = ?, weight_at = ? WHERE id = ?',
+                (weight, body_fat, now, page_id)
             )
             conn.commit()
-            
-            cursor.execute('SELECT weight, weight_at FROM pages WHERE id = ?', (page_id,))
+
+            cursor.execute('SELECT weight, body_fat, weight_at FROM pages WHERE id = ?', (page_id,))
             row = cursor.fetchone()
             conn.close()
-            
+
             return jsonify({
                 'success': True,
                 'weight': row['weight'],
