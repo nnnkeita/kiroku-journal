@@ -366,7 +366,7 @@
 </head>
 <body style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); font-family: 'BIZ UDPゴシック', sans-serif;" class="text-gray-700" onclick="hideContextMenu()">  
 
-    <div class="w-72 bg-gray-50 border-r border-gray-200 flex flex-col h-full flex-shrink-0" id="sidebar">
+    <div class="w-80 bg-gray-50 border-r border-gray-200 flex flex-col h-full flex-shrink-0" id="sidebar">
         <div class="p-4 flex justify-between items-center">
             <h1 class="font-bold text-gray-600 truncate">kioku journal-日記アプリ-</h1>
             <button onclick="openSearch()" class="text-gray-400 hover:text-gray-600" title="検索">🔍</button>
@@ -1320,16 +1320,12 @@
                                 title += `${Math.round(weather.temp_max)}°C / ${Math.round(weather.temp_min)}°C`;
                             }
 
-                            // 体重・体脂肪率
+                            // 体重
                             if (page?.weight) {
                                 if (html) html += ' ';
                                 html += `${page.weight}kg`;
                                 if (title) title += ' / ';
                                 title += `体重: ${page.weight}kg`;
-                            }
-                            if (page?.body_fat) {
-                                html += ` ${page.body_fat}%`;
-                                title += ` 体脂肪: ${page.body_fat}%`;
                             }
                             
                             if (html) {
