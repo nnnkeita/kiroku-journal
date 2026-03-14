@@ -27,7 +27,8 @@ from .database import (
 from .utils import (
     allowed_file, estimate_calories, estimate_calories_items, export_page_to_dict,
     page_to_markdown, create_page_from_dict, copy_page_tree,
-    backup_database_to_json, get_or_create_date_page
+    backup_database_to_json, get_or_create_date_page,
+    cleanup_accumulated_running_records
 )
 
 # パス設定
@@ -2480,6 +2481,12 @@ def register_routes(app):
         template = dict(cursor.fetchone())
         conn.close()
         return jsonify(template)
+
+    @app.route('/api/admin/cleanup-running-records', methods=['POST'])
+    def admin_cleanup_running_records():
+        """各日付ページに積み重なった前日以前のランニング記録を一括削除"""
+        deleted = cleanup_accumulated_running_records()
+        return jsonify({'success': True, 'deleted_blocks': deleted})
 
     @app.route('/webhook_deploy', methods=['POST'])
     def webhook_deploy():

@@ -399,6 +399,12 @@ def get_or_create_date_page(cursor, date_str):
         previous_page_id = prev_row['id']
         new_page_id = copy_page_tree(cursor, previous_page_id, new_title=title, new_parent_id=None, override_icon='📅')
 
+        # 前日のランニング記録は当日に引き継がない（RunTrackが投稿したブロックを削除）
+        cursor.execute(
+            "DELETE FROM blocks WHERE page_id = ? AND content LIKE ?",
+            (new_page_id, '🏃 ランニング記録%')
+        )
+
         cursor.execute('SELECT title FROM pages WHERE parent_id = ? AND is_deleted = 0', (new_page_id,))
         existing_titles = {row['title'] for row in cursor.fetchall()}
 
@@ -580,6 +586,66 @@ def copy_page_tree(cursor, source_page_id, new_title=None, new_parent_id=None, p
         copy_page_tree(cursor, child['id'], new_parent_id=new_page_id, position=child['position'])
 
     return new_page_id
+
+def cleanup_accumulated_running_records():
+    """各日付ページに積み重なった前日以前のランニング記録を削除する。
+    日付順に処理し、過去ページで既出のブロック内容はコピー品として削除する。"""
+    import re as _re
+    from datetime import datetime as _dt
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    date_pattern = _re.compile(r'^(\d{4})年(\d{1,2})月(\d{1,2})日$')
+
+    # 全日付ページを取得
+    cursor.execute('SELECT id, title FROM pages WHERE is_deleted = 0')
+    date_pages = []
+    for row in cursor.fetchall():
+        m = date_pattern.match(row['title'])
+        if not m:
+            continue
+        try:
+            d = _dt(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+            date_pages.append({'id': row['id'], 'date': d})
+        except ValueError:
+            pass
+
+    # 日付昇順で処理
+    date_pages.sort(key=lambda x: x['date'])
+
+    seen_contents = set()   # これまでの日付ページで確認済みのランニング記録内容
+    total_deleted = 0
+
+    for page_info in date_pages:
+        page_id = page_info['id']
+        cursor.execute(
+            "SELECT id, content FROM blocks WHERE page_id = ? AND content LIKE '🏃 ランニング記録%' ORDER BY id",
+            (page_id,)
+        )
+        run_blocks = cursor.fetchall()
+        if not run_blocks:
+            continue
+
+        to_delete = []
+        for block in run_blocks:
+            content = block['content']
+            if content in seen_contents:
+                # 前日以前にも存在 → コピー品なので削除
+                to_delete.append(block['id'])
+            else:
+                # 初出 → このページ固有の記録として残す
+                seen_contents.add(content)
+
+        if to_delete:
+            placeholders = ','.join('?' * len(to_delete))
+            cursor.execute(f"DELETE FROM blocks WHERE id IN ({placeholders})", to_delete)
+            total_deleted += len(to_delete)
+
+    conn.commit()
+    conn.close()
+    return total_deleted
+
 
 def backup_database_to_json():
     """データベースをJSONテキスト形式でバックアップ"""
