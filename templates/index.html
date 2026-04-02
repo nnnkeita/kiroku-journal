@@ -584,6 +584,7 @@
                         <button onmousedown="event.preventDefault(); addBlock('todo');" class="px-3 py-2 bg-white border border-gray-200 rounded shadow-sm text-gray-600 hover:bg-gray-100">☑️ チェックボックスを追加</button>
                         <button onmousedown="event.preventDefault(); addBlock('speak');" class="px-3 py-2 bg-white border border-gray-200 rounded shadow-sm text-gray-600 hover:bg-gray-100">🔊 読み上げボックスを追加</button>
                         <button onmousedown="event.preventDefault(); addBlock('book');" class="px-3 py-2 bg-white border border-gray-200 rounded shadow-sm text-gray-600 hover:bg-gray-100">📚 本の項目を追加</button>
+                        <button onmousedown="event.preventDefault(); addBlock('exercise');" class="px-3 py-2 bg-white border border-orange-200 rounded shadow-sm text-orange-700 hover:bg-orange-50">💪 筋トレセットを追加</button>
                         <button onmousedown="event.preventDefault(); addBlock('text');" class="px-3 py-2 bg-white border border-gray-200 rounded shadow-sm text-gray-600 hover:bg-gray-100">📝 テキスト</button>
                     </div>
                     <div class="text-gray-300 hover:text-gray-500 cursor-pointer text-sm p-2 group">
@@ -598,6 +599,7 @@
                             <button onmousedown="event.preventDefault(); addBlock('speak'); hideBlockMenu();" class="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">🔊 読み上げボックス</button>
                             <button onmousedown="event.preventDefault(); addBlock('book'); hideBlockMenu();" class="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">📚 本</button>
                             <button onmousedown="event.preventDefault(); addBlock('calorie'); hideBlockMenu();" class="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">🍽️ 食事/カロリー</button>
+                            <button onmousedown="event.preventDefault(); addBlock('exercise'); hideBlockMenu();" class="block w-full text-left px-3 py-2 text-sm hover:bg-orange-50 rounded text-orange-700">💪 筋トレセット</button>
                             <button onmousedown="event.preventDefault(); addBlock('image'); hideBlockMenu();" class="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">🖼️ 画像</button>
                         </div>
                     </div>
@@ -1125,6 +1127,39 @@
             dataEl.innerText = data;
             dataEl.classList.remove('hidden');
             console.log('[updateHealthplanetDataDisplay] Updated UI with:', data);
+        }
+
+        async function loadWeightData(pageId, pageTitle = null) {
+            const el = document.getElementById('body-weight-info');
+            if (!el || !pageId) return;
+            try {
+                const res = await fetch(`/api/pages/${pageId}/weight`);
+                if (!res.ok) { el.innerHTML = ''; return; }
+                const data = await res.json();
+
+                // weight_atとページの日付が一致しない場合は表示しない
+                if (pageTitle && data.weight_at) {
+                    const titleMatch = pageTitle.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+                    if (titleMatch) {
+                        const pageDate = `${titleMatch[1]}-${String(titleMatch[2]).padStart(2,'0')}-${String(titleMatch[3]).padStart(2,'0')}`;
+                        const weightDateUtc = new Date(data.weight_at.replace(' ', 'T') + 'Z');
+                        const weightDateJst = new Date(weightDateUtc.getTime() + 9 * 60 * 60 * 1000);
+                        const weightDateStr = weightDateJst.toISOString().slice(0, 10);
+                        if (weightDateStr !== pageDate) { el.innerHTML = ''; return; }
+                    }
+                }
+
+                let html = '';
+                if (data.weight != null) {
+                    html += `<span class="text-lg">⚖️</span><span class="text-gray-600">体重: <strong>${data.weight.toFixed(1)}kg</strong></span>`;
+                }
+                if (data.body_fat != null) {
+                    html += `<span style="font-size:0.875rem;color:#999;" class="mx-1">•</span><span class="text-lg">🔥</span><span class="text-gray-600">体脂肪: <strong>${data.body_fat.toFixed(1)}%</strong></span>`;
+                }
+                el.innerHTML = html;
+            } catch (e) {
+                el.innerHTML = '';
+            }
         }
 
         // --- 感情トラッカー機能 ---
@@ -1923,18 +1958,20 @@
             // 日付ナビゲーション、ムード、感謝日記を並列実行
             const dateMatch = page.title.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
             if (dateMatch) {
+                window.currentDiaryPageId = id;
                 const moodTracker = document.getElementById('mood-tracker');
                 const gratitudeJournal = document.getElementById('gratitude-journal');
                 moodTracker.classList.remove('hidden');
                 gratitudeJournal.classList.remove('hidden');
-                
+
+                promises.push(loadWeightData(id, page.title));
                 promises.push(
                     Promise.resolve().then(() => {
                         checkAndShowDateNavigation(page.title);
                         setupMoodTracker();
                         loadMoodData(page);
                         loadGratitudeData(page);
-                        
+
                         // Health Planet 自動同期を非同期で実行
                         const year = dateMatch[1];
                         const month = String(dateMatch[2]).padStart(2, '0');
@@ -1959,10 +1996,15 @@
             const categoryPages = ['筋トレ', '英語学習', '食事'];
             if (categoryPages.includes(page.title)) {
                 currentCategoryTitle = page.title;
+                window.currentDiaryPageId = page.parent_id || null;
                 categoryTabsDiv.classList.remove('hidden');
                 promises.push(Promise.resolve().then(() => switchCategoryTab('detail', page.title)));
+                if (window.currentDiaryPageId) {
+                    promises.push(loadWeightData(window.currentDiaryPageId));
+                }
             } else {
                 currentCategoryTitle = null;
+                window.currentDiaryPageId = null;
                 categoryTabsDiv.classList.add('hidden');
             }
             
@@ -2008,7 +2050,11 @@
                 } else if (categoryTitle === '食事') {
                     apiEndpoint = '/api/all-meals';
                 }
-                
+                // 現在の日記ページIDがあればその日のデータのみ取得
+                if (window.currentDiaryPageId) {
+                    apiEndpoint += `?parent_id=${window.currentDiaryPageId}`;
+                }
+
                 const res = await fetch(apiEndpoint);
                 const categoryData = await res.json();
                 console.log(`📊 ${categoryTitle} data received:`, categoryData);
@@ -2053,7 +2099,17 @@
                             loadPage(item.parent_page.id);
                         }
                     };
-                    
+
+                    // 「今日の記録に追加」ボタン
+                    const addToTodayBtn = document.createElement('button');
+                    addToTodayBtn.className = 'text-xs px-2 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded hover:bg-blue-100 transition ml-auto flex-shrink-0';
+                    addToTodayBtn.textContent = '📋 今日の記録に追加';
+                    addToTodayBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        addHistoryBlocksToCurrentPage(item.blocks);
+                    };
+                    dateHeader.appendChild(addToTodayBtn);
+
                     section.appendChild(dateHeader);
                     
                     // ブロック一覧を表示
@@ -2131,6 +2187,16 @@
                                     </div>
                                 `;
                             }
+                        } else if (block.type === 'exercise') {
+                            const exData = parseBlockProps(block.props) || { name: '', weight: 0, sets: 0, reps: 0 };
+                            const exName = exData.name || '種目名なし';
+                            blockDiv.innerHTML = `
+                                <div class="w-full border border-orange-100 bg-white rounded px-3 py-2">
+                                    <div class="text-xs text-orange-600 font-semibold mb-1">💪 筋トレセット</div>
+                                    <div class="text-gray-800 font-medium">${escapeHtml(exName)}</div>
+                                    <div class="text-xs text-gray-500 mt-1">${exData.weight ?? 0}kg × ${exData.reps ?? 0}回 × ${exData.sets ?? 0}セット</div>
+                                </div>
+                            `;
                         } else if (block.type === 'calorie') {
                             // calorieブロックは複数行のテキストなので改行を保持
                             if (block.content) {
@@ -2240,6 +2306,37 @@
                     contentHtml = `
                         <input type="checkbox" ${block.checked ? 'checked' : ''} onchange="handleTodoToggle(${block.id}, this.checked)" class="mt-1.5 rounded text-blue-500 focus:ring-0 cursor-pointer">
                         <textarea class="flex-1 ${block.checked ? 'line-through text-gray-400' : ''} border-none focus:ring-0 bg-transparent cursor-text block-textarea" placeholder="やったことを入力..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'content', this.value); autoResizeTextarea(this)" onkeydown="handleTodoKeydown(event, ${block.id})">${escapedTodo}</textarea>
+                    `;
+                } else if (block.type === 'exercise') {
+                    const exData = parseBlockProps(block.props) || { name: '', weight: 0, sets: 3, reps: 5 };
+                    const exWeight = exData.weight ?? 0;
+                    const exSets = exData.sets ?? 3;
+                    const exReps = exData.reps ?? 5;
+                    const escapedExName = (exData.name || '').replace(/"/g, '&quot;');
+                    contentHtml = `
+                        <div class="w-full border border-orange-200 bg-white rounded-lg p-3 shadow-sm">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-lg">💪</span>
+                                <input id="ex-name-${block.id}" class="flex-1 border-none focus:ring-0 bg-transparent text-base font-semibold" value="${escapedExName}" placeholder="種目名（例: ベンチプレス）" onfocus="setFocusedBlock(${block.id})" oninput="updateExerciseData(${block.id}, 'name', this.value)">
+                            </div>
+                            <div class="flex items-center gap-4 flex-wrap text-sm">
+                                <div class="flex items-center gap-1">
+                                    <span class="text-gray-600 text-xs">荷重:</span>
+                                    <button type="button" onmousedown="event.preventDefault(); adjustExerciseWeight(${block.id}, -0.5)" class="w-7 h-7 flex items-center justify-center bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded text-orange-700 font-bold">−</button>
+                                    <span id="ex-weight-${block.id}" class="w-16 text-center font-bold text-gray-800">${exWeight}kg</span>
+                                    <button type="button" onmousedown="event.preventDefault(); adjustExerciseWeight(${block.id}, 0.5)" class="w-7 h-7 flex items-center justify-center bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded text-orange-700 font-bold">＋</button>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-gray-600 text-xs">セット:</span>
+                                    <input id="ex-sets-${block.id}" type="number" min="1" max="99" value="${exSets}" class="w-14 border border-orange-100 rounded px-2 py-1 text-center text-sm" onfocus="setFocusedBlock(${block.id})" oninput="updateExerciseData(${block.id}, 'sets', parseInt(this.value) || 1)">
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-gray-600 text-xs">回数:</span>
+                                    <input id="ex-reps-${block.id}" type="number" min="1" max="99" value="${exReps}" class="w-14 border border-orange-100 rounded px-2 py-1 text-center text-sm" onfocus="setFocusedBlock(${block.id})" oninput="updateExerciseData(${block.id}, 'reps', parseInt(this.value) || 1)">
+                                </div>
+                                <div class="exercise-summary text-xs text-gray-400">${exWeight}kg × ${exReps}回 × ${exSets}セット</div>
+                            </div>
+                        </div>
                     `;
                 } else if (block.type === 'calorie') {
                     const props = parseBlockProps(block.props);
@@ -2480,6 +2577,10 @@
             if (type === 'speak') {
                 payload.props = JSON.stringify({ lang: 'ja-JP', rate: 1 });
             }
+            // exercise タイプの場合は初期props設定
+            if (type === 'exercise') {
+                payload.props = JSON.stringify({ name: '', weight: 0, sets: 3, reps: 5 });
+            }
             const res = await fetch(`/api/pages/${currentPageId}/blocks`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
             const block = await res.json();
             // 極力シームレスに反映（再読込せずに反映）
@@ -2511,6 +2612,9 @@
             const payload = { type, position };
             if (type === 'speak') {
                 payload.props = JSON.stringify({ lang: 'ja-JP', rate: 1 });
+            }
+            if (type === 'exercise') {
+                payload.props = JSON.stringify({ name: '', weight: 0, sets: 3, reps: 5 });
             }
             const res = await fetch(`/api/pages/${currentPageId}/blocks`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
             const block = await res.json();
@@ -2687,6 +2791,80 @@
                     body: JSON.stringify({ props: JSON.stringify(props) })
                 });
             });
+        }
+
+        // === 筋トレセット（exerciseブロック）機能 ===
+        function adjustExerciseWeight(blockId, delta) {
+            const block = currentBlocks.find(b => b.id === blockId);
+            if (!block) return;
+            const props = parseBlockProps(block.props) || { name: '', weight: 0, sets: 3, reps: 5 };
+            const current = parseFloat(props.weight) || 0;
+            // 浮動小数点誤差を防ぐため toFixed(1) で丸める
+            props.weight = parseFloat((current + delta).toFixed(1));
+            block.props = JSON.stringify(props);
+            const weightEl = document.getElementById(`ex-weight-${blockId}`);
+            if (weightEl) weightEl.textContent = `${props.weight}kg`;
+            const summaryEl = document.querySelector(`[data-id="${blockId}"] .exercise-summary`);
+            if (summaryEl) summaryEl.textContent = `${props.weight}kg × ${props.reps ?? 0}回 × ${props.sets ?? 0}セット`;
+            debouncedSave(`exercise-${blockId}`, async () => {
+                await fetch(`/api/blocks/${blockId}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ props: JSON.stringify(props) })
+                });
+            });
+        }
+
+        function updateExerciseData(blockId, field, value) {
+            const block = currentBlocks.find(b => b.id === blockId);
+            if (!block) return;
+            const props = parseBlockProps(block.props) || { name: '', weight: 0, sets: 3, reps: 5 };
+            props[field] = value;
+            block.props = JSON.stringify(props);
+            const summaryEl = document.querySelector(`[data-id="${blockId}"] .exercise-summary`);
+            if (summaryEl) summaryEl.textContent = `${props.weight ?? 0}kg × ${props.reps ?? 0}回 × ${props.sets ?? 0}セット`;
+            debouncedSave(`exercise-${blockId}-${field}`, async () => {
+                await fetch(`/api/blocks/${blockId}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ props: JSON.stringify(props) })
+                });
+            });
+        }
+
+        // 履歴のブロックを現在のページ（currentPageId）に追加
+        async function addHistoryBlocksToCurrentPage(blocks) {
+            if (!currentPageId) {
+                alert('現在のページが不明です');
+                return;
+            }
+            if (!blocks || blocks.length === 0) {
+                alert('追加できるブロックがありません');
+                return;
+            }
+            try {
+                const maxPos = currentBlocks.length > 0
+                    ? Math.max(...currentBlocks.map(b => b.position)) + 1
+                    : 0;
+                let position = maxPos;
+                for (const block of blocks) {
+                    const payload = { type: block.type, position: position++ };
+                    if (block.content) payload.content = block.content;
+                    if (block.props) payload.props = block.props;
+                    if (block.details) payload.details = block.details;
+                    if (block.checked !== undefined) payload.checked = block.checked;
+                    await fetch(`/api/pages/${currentPageId}/blocks`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    });
+                }
+                await loadPage(currentPageId);
+                await switchCategoryTab('detail');
+            } catch (e) {
+                console.error('Error adding history to current page:', e);
+                alert('追加に失敗しました');
+            }
         }
 
         function renderBookScrollPages(blockId, props) {
@@ -3499,7 +3677,12 @@
                         // ナビゲーションバーを更新
                         updateHealthplanetDataDisplay(page.blocks || [], true);
                         console.log(`[HealthPlanet] Updated health data display`);
-                        
+
+                        // 体重・体脂肪を再表示
+                        if (window.currentDiaryPageId) {
+                            loadWeightData(window.currentDiaryPageId, page.title);
+                        }
+
                         // キャッシュを更新
                         pageCache[currentPageId] = page;
                     }

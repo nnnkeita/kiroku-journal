@@ -493,17 +493,24 @@ def register_routes(app):
         conn.close()
         return jsonify(trash_pages)
 
-    def get_items_by_category(category_title):
+    def get_items_by_category(category_title, parent_id=None):
         """指定されたカテゴリーのページとブロックを取得する汎用関数"""
         conn = get_db()
         cursor = conn.cursor()
-        
+
         # 1. 指定されたカテゴリーページをすべて見つける（例：食事、筋トレ）
-        cursor.execute('''
-            SELECT * FROM pages 
-            WHERE title = ? AND is_deleted = 0
-            ORDER BY updated_at DESC
-        ''', (category_title,))
+        if parent_id is not None:
+            cursor.execute('''
+                SELECT * FROM pages
+                WHERE title = ? AND is_deleted = 0 AND parent_id = ?
+                ORDER BY updated_at DESC
+            ''', (category_title, parent_id))
+        else:
+            cursor.execute('''
+                SELECT * FROM pages
+                WHERE title = ? AND is_deleted = 0
+                ORDER BY updated_at DESC
+            ''', (category_title,))
         category_pages = [dict(row) for row in cursor.fetchall()]
         
         result = []
@@ -536,17 +543,20 @@ def register_routes(app):
     @app.route('/api/all-workouts', methods=['GET'])
     def get_all_workouts():
         """全ての日記から筋トレページとそのブロックを取得"""
-        return jsonify(get_items_by_category('筋トレ'))
+        parent_id = request.args.get('parent_id', type=int)
+        return jsonify(get_items_by_category('筋トレ', parent_id=parent_id))
 
     @app.route('/api/all-english-learning', methods=['GET'])
     def get_all_english_learning():
         """全ての日記から英語学習ページとそのブロックを取得"""
-        return jsonify(get_items_by_category('英語学習'))
+        parent_id = request.args.get('parent_id', type=int)
+        return jsonify(get_items_by_category('英語学習', parent_id=parent_id))
 
     @app.route('/api/all-meals', methods=['GET'])
     def get_all_meals():
         """全ての日記から食事ページとそのブロックを取得"""
-        return jsonify(get_items_by_category('食事'))
+        parent_id = request.args.get('parent_id', type=int)
+        return jsonify(get_items_by_category('食事', parent_id=parent_id))
 
     @app.route('/api/today-highlights/<int:page_id>', methods=['GET'])
     def get_today_highlights(page_id):
@@ -687,19 +697,44 @@ def register_routes(app):
 
     @app.route('/api/pages/from-date', methods=['POST'])
     def create_page_from_date():
-        """指定日付のページを作成（存在しない場合は前日をコピー）"""
+        """指定日付のページを作成（存在しない場合は前日をコピー）
+        category が指定された場合はその日付の子ページを返す"""
         data = request.json
         date_str = data.get('date')
+        category = data.get('category')  # 例: "筋トレ"
 
         if not date_str:
             return jsonify({'error': 'Invalid date format'}), 400
 
         conn = get_db()
         cursor = conn.cursor()
-        page = get_or_create_date_page(cursor, date_str)
-        if not page:
+        date_page = get_or_create_date_page(cursor, date_str)
+        if not date_page:
             conn.close()
             return jsonify({'error': 'Invalid date format'}), 400
+
+        if category:
+            # カテゴリサブページを取得または作成
+            category_icons = {'筋トレ': '🏋️', '英語学習': '🌍', '食事': '🍽️', '読書': '📚'}
+            icon = category_icons.get(category, '📄')
+            cursor.execute(
+                'SELECT * FROM pages WHERE parent_id = ? AND title = ? AND is_deleted = 0 LIMIT 1',
+                (date_page['id'], category)
+            )
+            sub_row = cursor.fetchone()
+            if sub_row:
+                page = dict(sub_row)
+            else:
+                cursor.execute(
+                    'INSERT INTO pages (title, icon, parent_id, position) VALUES (?, ?, ?, 1.0)',
+                    (category, icon, date_page['id'])
+                )
+                new_id = cursor.lastrowid
+                cursor.execute('SELECT * FROM pages WHERE id = ?', (new_id,))
+                page = dict(cursor.fetchone())
+        else:
+            page = date_page
+
         conn.commit()
         conn.close()
         return jsonify(page)
@@ -1648,19 +1683,17 @@ def register_routes(app):
         try:
             conn = get_db()
             cursor = conn.cursor()
-            cursor.execute('SELECT weight, weight_at FROM pages WHERE id = ?', (page_id,))
+            cursor.execute('SELECT weight, body_fat, weight_at FROM pages WHERE id = ?', (page_id,))
             row = cursor.fetchone()
             conn.close()
-            
+
             if not row:
                 return jsonify({'error': 'Page not found'}), 404
-            
-            weight = row['weight']
-            weight_at = row['weight_at']
-            
+
             return jsonify({
-                'weight': weight,
-                'weight_at': weight_at
+                'weight': row['weight'],
+                'body_fat': row['body_fat'],
+                'weight_at': row['weight_at']
             }), 200
         except Exception as e:
             return jsonify({'error': str(e)}), 500
