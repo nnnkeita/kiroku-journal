@@ -399,10 +399,17 @@ def get_or_create_date_page(cursor, date_str):
         previous_page_id = prev_row['id']
         new_page_id = copy_page_tree(cursor, previous_page_id, new_title=title, new_parent_id=None, override_icon='📅')
 
-        # 前日のランニング記録は当日に引き継がない（RunTrackが投稿したブロックを削除）
+        # 前日のランニング記録・ワークアウト記録・体重ブロックは当日に引き継がない
+        for pattern in ('🏃 ランニング記録%', '%GymTrack%', '💪 ワークアウト記録%', '体重%', '%体脂肪%'):
+            cursor.execute(
+                "DELETE FROM blocks WHERE page_id = ? AND content LIKE ?",
+                (new_page_id, pattern)
+            )
+
+        # 前日の体重データも引き継がない
         cursor.execute(
-            "DELETE FROM blocks WHERE page_id = ? AND content LIKE ?",
-            (new_page_id, '🏃 ランニング記録%')
+            "UPDATE pages SET weight = NULL, body_fat = NULL, weight_at = NULL WHERE id = ?",
+            (new_page_id,)
         )
 
         cursor.execute('SELECT title FROM pages WHERE parent_id = ? AND is_deleted = 0', (new_page_id,))
