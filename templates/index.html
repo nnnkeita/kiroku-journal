@@ -783,8 +783,8 @@
         const MAX_UNDO = 50; // 最大履歴数
         
         // 保存リクエストのキュー管理（パフォーマンス改善）
-        let saveQueue = new Map(); // blockId/pageId -> timeout
-        const DEBOUNCE_TIME = 800; // デバウンス時間（ms）
+        let saveQueue = new Map(); // key -> { timeoutId, saveFn }
+        const DEBOUNCE_TIME = 500; // デバウンス時間（ms）
 
 
         function toggleSidebar() {
@@ -1876,10 +1876,17 @@
         const CACHE_SIZE = 20; // 最大20ページをキャッシュ
         
         async function loadPage(id) {
+            // ページ切り替え前に未保存の変更をすべて即時保存
+            await flushAllPendingSaves();
+            // 前のページのキャッシュを無効化（staleデータ防止）
+            if (currentPageId && currentPageId !== id && pageCache[currentPageId]) {
+                delete pageCache[currentPageId];
+            }
+
             currentPageId = id;
             window.currentPageId = id;
             closeSidebar(); // モバイルではサイドバーを閉じる
-            
+
             // ローディング表示
             document.getElementById('save-status').innerText = '読み込み中...';
             const blocksContainer = document.getElementById('blocks');
@@ -2653,15 +2660,16 @@
         // 効率的な保存処理（キュー管理）
         function debouncedSave(key, saveFunction, delay = DEBOUNCE_TIME) {
             if (saveQueue.has(key)) {
-                clearTimeout(saveQueue.get(key));
+                clearTimeout(saveQueue.get(key).timeoutId);
             }
-            
+
             document.getElementById('save-status').innerText = '保存中...';
-            
+
             const timeoutId = setTimeout(async () => {
                 try {
                     await saveFunction();
                     document.getElementById('save-status').innerText = '保存済み';
+                    if (currentPageId && pageCache[currentPageId]) delete pageCache[currentPageId];
                 } catch (error) {
                     console.error('Save error:', error);
                     document.getElementById('save-status').innerText = '保存失敗';
@@ -2669,8 +2677,19 @@
                     saveQueue.delete(key);
                 }
             }, delay);
-            
-            saveQueue.set(key, timeoutId);
+
+            saveQueue.set(key, { timeoutId, saveFn: saveFunction });
+        }
+
+        // ページ切り替え前に未保存の変更を即時フラッシュ
+        async function flushAllPendingSaves() {
+            if (saveQueue.size === 0) return;
+            document.getElementById('save-status').innerText = '保存中...';
+            const entries = Array.from(saveQueue.entries());
+            saveQueue.clear();
+            entries.forEach(([, { timeoutId }]) => clearTimeout(timeoutId));
+            await Promise.all(entries.map(([, { saveFn }]) => saveFn().catch(e => console.error('flush save error:', e))));
+            document.getElementById('save-status').innerText = '保存済み';
         }
         
         function updateBlock(id, key, value) {
