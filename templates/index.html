@@ -1696,7 +1696,24 @@
             const parentKey = parentId === null ? 'root' : parentId;
             if (!siblingsByParent.has(parentKey)) siblingsByParent.set(parentKey, []);
 
-            pages.forEach(page => {
+            // 日付ページ・月フォルダは新しい順にソート、それ以外はposition順
+            const datePattern = /^(\d{4})年(\d{1,2})月(\d{1,2})日$/;
+            const monthPattern = /^(\d{4})年(\d{1,2})月$/;
+            const getDateVal = (title) => {
+                const m = datePattern.exec(title) || monthPattern.exec(title);
+                if (!m) return null;
+                return new Date(+m[1], +m[2] - 1, m[3] ? +m[3] : 1);
+            };
+            const sorted = [...pages].sort((a, b) => {
+                const da = getDateVal(a.title);
+                const db = getDateVal(b.title);
+                if (da && db) return db - da;
+                if (da) return -1;
+                if (db) return 1;
+                return a.position - b.position;
+            });
+
+            sorted.forEach(page => {
                 const wrapper = document.createElement('div');
                 const row = document.createElement('div');
                 const isSelected = selectedPageIds.has(page.id);

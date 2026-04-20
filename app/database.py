@@ -683,14 +683,72 @@ def archive_old_diary_pages():
     # 3日前以前の日付を閾値とする
     threshold = (datetime.now().date() - timedelta(days=3))
 
-    # ルートレベル（parent_id IS NULL）の日付形式ページを検索
+    date_pattern = re.compile(r'^(\d{4})年(\d{1,2})月(\d{1,2})日$')
+
+    def get_or_create_month_folder(year, month):
+        """月別サブフォルダを取得または作成する"""
+        month_title = f"{year}年{int(month)}月"
+        cursor.execute(
+            'SELECT id FROM pages WHERE title = ? AND parent_id = ? AND is_deleted = 0',
+            (month_title, folder_id)
+        )
+        row = cursor.fetchone()
+        if row:
+            return row['id']
+        cursor.execute(
+            'SELECT MIN(position) FROM pages WHERE parent_id = ? AND is_deleted = 0',
+            (folder_id,)
+        )
+        min_pos = cursor.fetchone()[0]
+        new_pos = (min_pos if min_pos is not None else 0) - 1000.0
+        cursor.execute(
+            'INSERT INTO pages (title, icon, parent_id, position) VALUES (?, ?, ?, ?)',
+            (month_title, '📅', folder_id, new_pos)
+        )
+        month_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO blocks (page_id, type, content, position) VALUES (?, 'text', '', ?)",
+            (month_id, 1000.0)
+        )
+        return month_id
+
+    def move_to_month_folder(page_id, year, month):
+        """指定ページを月別フォルダへ移動する"""
+        month_folder_id = get_or_create_month_folder(year, month)
+        cursor.execute(
+            'SELECT MAX(position) FROM pages WHERE parent_id = ? AND is_deleted = 0',
+            (month_folder_id,)
+        )
+        max_pos = cursor.fetchone()[0]
+        new_pos = (max_pos if max_pos is not None else 0) + 1000.0
+        cursor.execute(
+            'UPDATE pages SET parent_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            (month_folder_id, new_pos, page_id)
+        )
+
+    archived_count = 0
+
+    # 既に「過去の日記」直下にある日付ページを月別フォルダへ再整理
+    cursor.execute(
+        'SELECT * FROM pages WHERE parent_id = ? AND is_deleted = 0',
+        (folder_id,)
+    )
+    archive_direct_children = cursor.fetchall()
+    for page in archive_direct_children:
+        match = date_pattern.match(page['title'])
+        if not match:
+            continue
+        try:
+            move_to_month_folder(page['id'], match.group(1), match.group(2))
+            archived_count += 1
+        except ValueError:
+            continue
+
+    # ルートレベルの日付形式ページを検索してアーカイブ
     cursor.execute(
         'SELECT * FROM pages WHERE parent_id IS NULL AND is_deleted = 0'
     )
     root_pages = cursor.fetchall()
-
-    date_pattern = re.compile(r'^(\d{4})年(\d{1,2})月(\d{1,2})日$')
-    archived_count = 0
 
     for page in root_pages:
         match = date_pattern.match(page['title'])
@@ -704,16 +762,7 @@ def archive_old_diary_pages():
             continue
 
         if page_date <= threshold:
-            cursor.execute(
-                'SELECT MAX(position) FROM pages WHERE parent_id = ? AND is_deleted = 0',
-                (folder_id,)
-            )
-            max_pos = cursor.fetchone()[0]
-            new_pos = (max_pos if max_pos is not None else 0) + 1000.0
-            cursor.execute(
-                'UPDATE pages SET parent_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                (folder_id, new_pos, page['id'])
-            )
+            move_to_month_folder(page['id'], match.group(1), match.group(2))
             archived_count += 1
 
     if archived_count > 0:
