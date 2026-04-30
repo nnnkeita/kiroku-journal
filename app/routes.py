@@ -715,7 +715,10 @@ def register_routes(app):
 
         if category:
             # カテゴリサブページを取得または作成
-            category_icons = {'筋トレ': '🏋️', '英語学習': '🌍', '食事': '🍽️', '読書': '📚'}
+            category_icons = {'食事': '🍽️', '読書': '📚'}
+            if category not in category_icons:
+                conn.close()
+                return jsonify({'error': 'Unsupported category'}), 400
             icon = category_icons.get(category, '📄')
             cursor.execute(
                 'SELECT * FROM pages WHERE parent_id = ? AND title = ? AND is_deleted = 0 LIMIT 1',

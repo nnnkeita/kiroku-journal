@@ -412,13 +412,20 @@ def get_or_create_date_page(cursor, date_str):
             (new_page_id,)
         )
 
-        cursor.execute('SELECT title FROM pages WHERE parent_id = ? AND is_deleted = 0', (new_page_id,))
-        existing_titles = {row['title'] for row in cursor.fetchall()}
+        excluded_children = {'筋トレ', '英語学習'}
+        cursor.execute(
+            'SELECT id, title FROM pages WHERE parent_id = ? AND is_deleted = 0',
+            (new_page_id,)
+        )
+        existing_titles = set()
+        for row in cursor.fetchall():
+            if row['title'] in excluded_children:
+                mark_tree_deleted(cursor, row['id'], is_deleted=True)
+            else:
+                existing_titles.add(row['title'])
 
         required_children = [
             ('日記', '📝'),
-            ('筋トレ', '🏋️'),
-            ('英語学習', '🌍'),
             ('食事', '🍽️'),
             ('読書', '📚'),
         ]
@@ -470,34 +477,6 @@ def get_or_create_date_page(cursor, date_str):
                 {'type': 'h1', 'content': 'やったこと'},
                 {'type': 'todo', 'content': ''},
                 {'type': 'h1', 'content': '振り返り'},
-                {'type': 'text', 'content': ''},
-            ]
-        },
-        {
-            'title': '筋トレ',
-            'icon': '🏋️',
-            'blocks': [
-                {'type': 'h1', 'content': '今日のメニュー'},
-                {'type': 'todo', 'content': ''},
-                {'type': 'h1', 'content': 'セット・回数'},
-                {'type': 'text', 'content': ''},
-                {'type': 'h1', 'content': 'メモ'},
-                {'type': 'text', 'content': ''},
-            ]
-        },
-        {
-            'title': '英語学習',
-            'icon': '🌍',
-            'blocks': [
-                {'type': 'h1', 'content': '今日の学習内容'},
-                {'type': 'text', 'content': ''},
-                {'type': 'h1', 'content': '新しい単語'},
-                {'type': 'todo', 'content': ''},
-                {'type': 'h1', 'content': '発音練習'},
-                {'type': 'text', 'content': ''},
-                {'type': 'h1', 'content': 'リスニング時間'},
-                {'type': 'text', 'content': ''},
-                {'type': 'h1', 'content': '気づいたこと'},
                 {'type': 'text', 'content': ''},
             ]
         },
