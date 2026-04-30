@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>kioku journal-日記アプリ-</title>
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem('theme') === 'dark') {
+                    document.documentElement.classList.add('dark');
+                }
+            } catch (e) {}
+        })();
+    </script>
     
     <!-- DNS Prefetch & Preconnect -->
     <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
@@ -27,6 +36,15 @@
     <!-- Sortable.js - defer loading -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js" defer></script>
     <style>
+        html:not(.app-ready) body {
+            opacity: 0;
+        }
+
+        html.app-ready body {
+            opacity: 1;
+            transition: opacity 0.12s ease-out;
+        }
+
         .loader { border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .nav-child { margin-left: 12px; border-left: 1px solid #e5e7eb; }
@@ -804,11 +822,12 @@
         let copiedPageId = null; // コピーしたページID
         let undoStack = []; // 元に戻す履歴
         let redoStack = []; // やり直し履歴
+        let pageLoadToken = 0; // 古いページ読み込み結果の反映を防ぐ
         const MAX_UNDO = 50; // 最大履歴数
         
         // 保存リクエストのキュー管理（パフォーマンス改善）
         let saveQueue = new Map(); // key -> { timeoutId, saveFn }
-        const DEBOUNCE_TIME = 500; // デバウンス時間（ms）
+        const DEBOUNCE_TIME = 150; // デバウンス時間（ms）
 
 
         function toggleSidebar() {
@@ -859,6 +878,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            requestAnimationFrame(() => {
+                document.documentElement.classList.add('app-ready');
+            });
             // ローカルストレージから折りたたみ状態を復元
             const saved = localStorage.getItem('collapsedFolders');
             if (saved) {
@@ -895,6 +917,16 @@
                     }
                 }
             });
+        });
+
+        window.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                flushAllPendingSaves();
+            }
+        });
+
+        window.addEventListener('pagehide', () => {
+            flushAllPendingSaves();
         });
 
         function setFocusedBlock(id) {
@@ -1900,8 +1932,11 @@
         const CACHE_SIZE = 20; // 最大20ページをキャッシュ
         
         async function loadPage(id) {
+            const loadToken = ++pageLoadToken;
             // ページ切り替え前に未保存の変更をすべて即時保存
             await flushAllPendingSaves();
+            if (loadToken !== pageLoadToken) return;
+
             // 前のページのキャッシュを無効化（staleデータ防止）
             if (currentPageId && currentPageId !== id && pageCache[currentPageId]) {
                 delete pageCache[currentPageId];
@@ -1926,6 +1961,7 @@
             if (!page) {
                 const res = await fetch(`/api/pages/${id}`);
                 page = await res.json();
+                if (loadToken !== pageLoadToken) return;
                 
                 // キャッシュに保存（容量管理）
                 pageCache[id] = page;
@@ -2062,6 +2098,7 @@
             
             // 残りの非同期処理を完了待ち（ブロック描画後）
             await Promise.all(promises);
+            if (loadToken !== pageLoadToken) return;
             
             document.getElementById('save-status').innerText = '保存済み';
         }
@@ -2717,6 +2754,13 @@
         }
         
         function updateBlock(id, key, value) {
+            const block = (currentBlocks || []).find(b => b.id === id);
+            if (block) {
+                block[key] = value;
+            }
+            if (currentPageId && pageCache[currentPageId]) {
+                delete pageCache[currentPageId];
+            }
             debouncedSave(`block-${id}-${key}`, async () => {
                 const body = {};
                 body[key] = value;
