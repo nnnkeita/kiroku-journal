@@ -287,6 +287,30 @@
             background-color: #164e3f !important;
         }
 
+        /* 青空と雲の背景（通常モード） */
+        html:not(.dark) #editor-container {
+            background-color: #e9f7ff;
+            background-image:
+                radial-gradient(ellipse at 15% 12%, rgba(255, 255, 255, 0.95) 0 9%, rgba(255, 255, 255, 0.55) 10% 16%, transparent 24%),
+                radial-gradient(ellipse at 88% 18%, rgba(255, 255, 255, 0.86) 0 8%, rgba(255, 255, 255, 0.48) 9% 15%, transparent 23%),
+                radial-gradient(ellipse at 72% 58%, rgba(255, 255, 255, 0.72) 0 7%, rgba(255, 255, 255, 0.34) 8% 14%, transparent 22%),
+                linear-gradient(180deg, #cfeeff 0%, #e9f7ff 46%, #f8fcff 100%);
+            background-attachment: local;
+            background-repeat: no-repeat;
+        }
+
+        html:not(.dark) #editor-container.knowledge-mode {
+            background-image:
+                radial-gradient(ellipse at 16% 12%, rgba(255, 255, 255, 0.9) 0 8%, rgba(255, 255, 255, 0.45) 9% 15%, transparent 23%),
+                radial-gradient(ellipse at 86% 20%, rgba(255, 255, 255, 0.76) 0 7%, rgba(255, 255, 255, 0.35) 8% 14%, transparent 22%),
+                linear-gradient(180deg, #d9f5ff 0%, #f0fff4 58%, #f8fffb 100%);
+        }
+
+        html:not(.dark) #main-container > .h-10 {
+            background-color: rgba(255, 255, 255, 0.86) !important;
+            backdrop-filter: blur(10px);
+        }
+
         /* PC用（768px以上） */
         body { 
             display: flex;
