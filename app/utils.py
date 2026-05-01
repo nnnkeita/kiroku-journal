@@ -400,7 +400,7 @@ def get_or_create_date_page(cursor, date_str):
         new_page_id = copy_page_tree(cursor, previous_page_id, new_title=title, new_parent_id=None, override_icon='📅')
 
         # 前日のランニング記録・ワークアウト記録・体重ブロックは当日に引き継がない
-        for pattern in ('🏃 ランニング記録%', '%GymTrack%', '💪 ワークアウト記録%', '体重%', '%体脂肪%'):
+        for pattern in ('%🏃 ランニング記録%', '%GymTrack%', '%💪 ワークアウト記録%', '体重%', '%体脂肪%'):
             cursor.execute(
                 "DELETE FROM blocks WHERE page_id = ? AND content LIKE ?",
                 (new_page_id, pattern)
@@ -606,7 +606,7 @@ def cleanup_accumulated_running_records():
     for page_info in date_pages:
         page_id = page_info['id']
         cursor.execute(
-            "SELECT id, content FROM blocks WHERE page_id = ? AND content LIKE '🏃 ランニング記録%' ORDER BY id",
+            "SELECT id, content FROM blocks WHERE page_id = ? AND content LIKE '%🏃 ランニング記録%' ORDER BY id",
             (page_id,)
         )
         run_blocks = cursor.fetchall()
