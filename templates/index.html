@@ -3628,7 +3628,10 @@
                 const syncBtn = document.getElementById('hp-sync-btn');
                 
                 if (status.connected) {
-                    statusEl.innerHTML = `✅ 連携済み<br><span class="text-xs text-gray-500">トークン: ${status.expires_at ? '有効' : '期限切れ'}</span>`;
+                    const tokenText = status.refresh_error
+                        ? `自動更新失敗: ${status.refresh_error}`
+                        : (status.is_expired ? '期限切れ' : '有効');
+                    statusEl.innerHTML = `✅ 連携済み<br><span class="text-xs text-gray-500">トークン: ${tokenText}</span>`;
                     connectBtn.classList.add('hidden');
                     disconnectBtn.classList.remove('hidden');
                     syncBtn.classList.remove('hidden');

@@ -59,6 +59,60 @@ def register_routes(app):
             parsed = urllib.parse.parse_qs(raw_text)
             return {k: v[0] for k, v in parsed.items()}
 
+    def _refresh_healthplanet_token(token_row):
+        refresh_token = token_row['refresh_token'] if token_row else None
+        if not refresh_token:
+            raise Exception('HealthPlanetの再認可が必要です。')
+
+        client_id, client_secret, _, scope = _get_healthplanet_config()
+        if not client_id or not client_secret:
+            raise Exception('HealthPlanet設定が不足しています。')
+
+        payload = urllib.parse.urlencode({
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'refresh_token': refresh_token,
+            'grant_type': 'refresh_token'
+        }).encode('utf-8')
+
+        req = urllib.request.Request(
+            'https://www.healthplanet.jp/oauth/token',
+            data=payload,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
+        with _healthplanet_urlopen(req, timeout=30) as resp:
+            raw = resp.read().decode('utf-8')
+        token_data = _parse_healthplanet_token_response(raw)
+
+        access_token = token_data.get('access_token')
+        next_refresh_token = token_data.get('refresh_token') or refresh_token
+        expires_in = token_data.get('expires_in')
+        expires_at = None
+        if expires_in:
+            try:
+                expires_at = (datetime.utcnow() + timedelta(seconds=int(expires_in))).isoformat()
+            except Exception:
+                expires_at = None
+        if not access_token:
+            raise Exception('HealthPlanetトークンを更新できませんでした。')
+
+        save_healthplanet_token(access_token, next_refresh_token, expires_at, scope)
+        return get_healthplanet_token()
+
+    def _get_valid_healthplanet_token():
+        token_row = get_healthplanet_token()
+        if not token_row:
+            return None, 'HealthPlanetが未連携です。'
+
+        expires_at = token_row['expires_at']
+        if expires_at:
+            try:
+                if datetime.fromisoformat(expires_at) < datetime.utcnow() + timedelta(minutes=5):
+                    token_row = _refresh_healthplanet_token(token_row)
+            except Exception as e:
+                return None, str(e)
+        return token_row, None
+
     def _healthplanet_urlopen(req, timeout=30):
         proxy_url = os.getenv('HEALTHPLANET_PROXY_URL', '').strip()
         if not proxy_url and os.getenv('PYTHONANYWHERE_DOMAIN'):
@@ -247,18 +301,10 @@ def register_routes(app):
         Returns:
             tuple: (成功フラグ, メッセージ)
         """
-        token_row = get_healthplanet_token()
-        if not token_row:
-            return False, 'HealthPlanetが未連携です。'
-
+        token_row, token_error = _get_valid_healthplanet_token()
+        if token_error:
+            return False, token_error
         access_token = token_row['access_token']
-        expires_at = token_row['expires_at']
-        if expires_at:
-            try:
-                if datetime.fromisoformat(expires_at) < datetime.utcnow():
-                    return False, 'トークン期限切れです。再連携してください。'
-            except Exception:
-                pass
 
         # 対象期間を決定
         jst_now = datetime.utcnow() + timedelta(hours=9)
@@ -1444,6 +1490,14 @@ def register_routes(app):
         token_row = get_healthplanet_token()
         if not token_row:
             return jsonify({'connected': False}), 200
+
+        refresh_error = None
+        try:
+            expires_at = token_row['expires_at']
+            if expires_at and datetime.fromisoformat(expires_at) < datetime.utcnow() + timedelta(minutes=5):
+                token_row = _refresh_healthplanet_token(token_row)
+        except Exception as e:
+            refresh_error = str(e)
         
         # トークンの有効期限を確認
         expires_at = token_row['expires_at']
@@ -1458,7 +1512,8 @@ def register_routes(app):
         return jsonify({
             'connected': True,
             'expires_at': expires_at,
-            'is_expired': is_expired
+            'is_expired': is_expired,
+            'refresh_error': refresh_error
         }), 200
 
     @app.route('/api/healthplanet/disconnect', methods=['POST'])
@@ -1488,18 +1543,10 @@ def register_routes(app):
     @app.route('/api/healthplanet/latest-weight', methods=['GET'])
     def healthplanet_latest_weight():
         """Health Planet から最新の体重データを取得"""
-        token_row = get_healthplanet_token()
-        if not token_row:
-            return jsonify({'error': 'HealthPlanetが未連携です。先にフロー著してください'}), 400
-        
+        token_row, token_error = _get_valid_healthplanet_token()
+        if token_error:
+            return jsonify({'error': token_error}), 400
         access_token = token_row['access_token']
-        expires_at = token_row['expires_at']
-        if expires_at:
-            try:
-                if datetime.fromisoformat(expires_at) < datetime.utcnow():
-                    return jsonify({'error': 'トークン期限切れです。再度認可してください'}), 400
-            except Exception:
-                pass
         
         jst_now = datetime.utcnow() + timedelta(hours=9)
         range_start = (jst_now - timedelta(days=30)).strftime('%Y%m%d%H%M%S')
@@ -1555,18 +1602,10 @@ def register_routes(app):
             except ValueError:
                 return jsonify({'error': '日付形式が正しくありません（YYYY-MM-DD）'}), 400
             
-            token_row = get_healthplanet_token()
-            if not token_row:
-                return jsonify({'error': 'HealthPlanetが未連携です'}), 400
-            
+            token_row, token_error = _get_valid_healthplanet_token()
+            if token_error:
+                return jsonify({'error': token_error}), 400
             access_token = token_row['access_token']
-            expires_at = token_row['expires_at']
-            if expires_at:
-                try:
-                    if datetime.fromisoformat(expires_at) < datetime.utcnow():
-                        return jsonify({'error': 'トークン期限切れです'}), 400
-                except Exception:
-                    pass
             
             # その日の開始〜終了時刻で検索
             start_time = target_dt.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1626,18 +1665,10 @@ def register_routes(app):
             except ValueError:
                 return jsonify({'error': '日付形式が正しくありません（YYYY-MM-DD）'}), 400
             
-            token_row = get_healthplanet_token()
-            if not token_row:
-                return jsonify({'error': 'HealthPlanetが未連携です'}), 400
-            
+            token_row, token_error = _get_valid_healthplanet_token()
+            if token_error:
+                return jsonify({'error': token_error}), 400
             access_token = token_row['access_token']
-            expires_at = token_row['expires_at']
-            if expires_at:
-                try:
-                    if datetime.fromisoformat(expires_at) < datetime.utcnow():
-                        return jsonify({'error': 'トークン期限切れです'}), 400
-                except Exception:
-                    pass
             
             # その日の開始〜終了時刻で検索
             start_time = target_dt.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1769,10 +1800,9 @@ def register_routes(app):
             from_str = start_time.strftime('%Y%m%d%H%M%S')
             to_str = end_time.strftime('%Y%m%d%H%M%S')
             
-            token_row = get_healthplanet_token()
-            if not token_row:
-                return jsonify({'error': 'HealthPlanetが未連携です'}), 400
-            
+            token_row, token_error = _get_valid_healthplanet_token()
+            if token_error:
+                return jsonify({'error': token_error}), 400
             access_token = token_row['access_token']
             
             try:
@@ -1850,10 +1880,9 @@ def register_routes(app):
             except ValueError:
                 return jsonify({'error': '日付形式が正しくありません'}), 400
             
-            token_row = get_healthplanet_token()
-            if not token_row:
-                return jsonify({'error': 'HealthPlanetが未連携です'}), 400
-            
+            token_row, token_error = _get_valid_healthplanet_token()
+            if token_error:
+                return jsonify({'error': token_error}), 400
             access_token = token_row['access_token']
             
             start_time = target_dt.replace(hour=0, minute=0, second=0)
