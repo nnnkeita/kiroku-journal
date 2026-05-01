@@ -2742,8 +2742,36 @@
             saveQueue.set(key, { timeoutId, saveFn: saveFunction });
         }
 
+        function captureActiveEditorValue() {
+            const active = document.activeElement;
+            if (!active || !currentPageId) return;
+
+            if (active.id === 'page-title') {
+                saveTitle();
+                return;
+            }
+
+            if (!['TEXTAREA', 'INPUT'].includes(active.tagName)) return;
+            const blockRow = active.closest('.block-row');
+            if (!blockRow || !blockRow.dataset.id) return;
+
+            const blockId = parseInt(blockRow.dataset.id);
+            if (!blockId) return;
+            const block = (currentBlocks || []).find(b => b.id === blockId);
+            if (block && ['book', 'exercise', 'calorie'].includes(block.type)) return;
+
+            if (active.classList.contains('knowledge-title')) {
+                updateKnowledgeTitle(blockId, active.value || '');
+                return;
+            }
+
+            const key = active.closest('details') && active.tagName === 'TEXTAREA' ? 'details' : 'content';
+            updateBlock(blockId, key, active.value || '');
+        }
+
         // ページ切り替え前に未保存の変更を即時フラッシュ
         async function flushAllPendingSaves() {
+            captureActiveEditorValue();
             if (saveQueue.size === 0) return;
             document.getElementById('save-status').innerText = '保存中...';
             const entries = Array.from(saveQueue.entries());
