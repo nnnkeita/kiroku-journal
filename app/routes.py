@@ -64,13 +64,14 @@ def register_routes(app):
         if not refresh_token:
             raise Exception('HealthPlanetの再認可が必要です。')
 
-        client_id, client_secret, _, scope = _get_healthplanet_config()
-        if not client_id or not client_secret:
+        client_id, client_secret, redirect_uri, scope = _get_healthplanet_config()
+        if not client_id or not client_secret or not redirect_uri:
             raise Exception('HealthPlanet設定が不足しています。')
 
         payload = urllib.parse.urlencode({
             'client_id': client_id,
             'client_secret': client_secret,
+            'redirect_uri': redirect_uri,
             'refresh_token': refresh_token,
             'grant_type': 'refresh_token'
         }).encode('utf-8')
