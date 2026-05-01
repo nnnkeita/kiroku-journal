@@ -3604,7 +3604,7 @@
                                 🔌 連携を解除する
                             </button>
                             <button id="hp-sync-btn" onclick="syncHealthPlanetNow()" class="w-full px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded font-semibold transition hidden">
-                                💾 今日の記録を同期
+                                💾 直近30日を日付ごとに同期
                             </button>
                         </div>
                         <div id="hp-sync-result" class="text-sm text-gray-600 p-2 bg-gray-50 rounded hidden"></div>
@@ -3674,7 +3674,11 @@
             resultEl.textContent = '同期中...';
             
             try {
-                const res = await fetch('/api/healthplanet/sync', { method: 'POST' });
+                const res = await fetch('/api/healthplanet/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days: 30 })
+                });
                 const data = await res.json();
                 
                 if (res.ok) {
@@ -3689,7 +3693,7 @@
                 resultEl.className = 'text-sm text-red-600 p-2 bg-red-50 rounded';
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '💾 今日の記録を同期';
+                btn.innerHTML = '💾 直近30日を日付ごとに同期';
             }
         }
         

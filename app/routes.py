@@ -172,11 +172,77 @@ def register_routes(app):
             (page_id, content, new_pos, props)
         )
 
-    def sync_healthplanet_for_date(target_date=None):
-        """指定日付（またはJST現在時刻）のHealthPlaneのデータを同期
+    def _parse_healthplanet_datetime(date_value):
+        """Health Planet の YYYYMMDDHHMM/ YYYYMMDDHHMMSS をJSTのdatetimeにする"""
+        text = str(date_value or '').strip()
+        for fmt in ('%Y%m%d%H%M%S', '%Y%m%d%H%M'):
+            try:
+                return datetime.strptime(text, fmt)
+            except ValueError:
+                pass
+        return None
+
+    def _healthplanet_db_timestamp(date_value):
+        measured_jst = _parse_healthplanet_datetime(date_value)
+        if not measured_jst:
+            return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        measured_utc = measured_jst - timedelta(hours=9)
+        return measured_utc.strftime('%Y-%m-%d %H:%M:%S')
+
+    def _group_healthplanet_measurements_by_date(data):
+        """Health Planet のレスポンスを測定日ごと・タグごとに最新値へまとめる"""
+        grouped = {}
+        for entry in data.get('data', []) if isinstance(data, dict) else []:
+            print(f"[DEBUG] Processing Entry: {entry}")
+            tag = str(entry.get('tag', ''))
+            keydata = str(entry.get('keydata', '')).strip()
+            date_value = str(entry.get('date', '')).strip()
+            measured_dt = _parse_healthplanet_datetime(date_value)
+            if not tag or not keydata or not measured_dt:
+                print(f"[DEBUG] Skipping Entry: {entry}")
+                continue
+            date_key = measured_dt.strftime('%Y-%m-%d')
+            grouped.setdefault(date_key, {})
+            current = grouped[date_key].get(tag)
+            if not current or date_value > current.get('date', ''):
+                grouped[date_key][tag] = {'value': keydata, 'date': date_value}
+        return grouped
+
+    def _save_healthplanet_measurements(cursor, date_str, measurements):
+        latest_values = {k: v.get('value') for k, v in measurements.items()}
+        latest_date_value = max((v.get('date', '') for v in measurements.values()), default='')
+        content = _format_healthplanet_line(latest_values)
+        if not content:
+            return False
+
+        page = get_or_create_date_page(cursor, date_str)
+        if not page:
+            return False
+        _upsert_healthplanet_block(cursor, page['id'], content)
+
+        weight_val = latest_values.get('6021')
+        body_fat_val = latest_values.get('6022')
+        try:
+            weight_float = float(weight_val) if weight_val else None
+        except (ValueError, TypeError):
+            weight_float = None
+        try:
+            body_fat_float = float(body_fat_val) if body_fat_val else None
+        except (ValueError, TypeError):
+            body_fat_float = None
+        if weight_float is not None or body_fat_float is not None:
+            cursor.execute(
+                'UPDATE pages SET weight = ?, body_fat = ?, weight_at = ? WHERE id = ?',
+                (weight_float, body_fat_float, _healthplanet_db_timestamp(latest_date_value), page['id'])
+            )
+        return True
+
+    def sync_healthplanet_for_date(target_date=None, days=None):
+        """指定日付または直近期間のHealthPlanetデータを測定日ごとに同期
         
         Args:
-            target_date (str, optional): 同期対象日付 (YYYY-MM-DD形式). Noneなら今日
+            target_date (str, optional): 同期対象日付 (YYYY-MM-DD形式). Noneなら直近期間
+            days (int, optional): target_dateなしの場合、直近何日分を同期するか
             
         Returns:
             tuple: (成功フラグ, メッセージ)
@@ -194,20 +260,23 @@ def register_routes(app):
             except Exception:
                 pass
 
-        # 対象日付を決定
+        # 対象期間を決定
         jst_now = datetime.utcnow() + timedelta(hours=9)
         if target_date:
             try:
                 target_dt = datetime.strptime(target_date, '%Y-%m-%d')
-                # タイムゾーン補正（指定日付を23時59分59秒まで取得）
                 date_str = target_date
                 start = target_dt.replace(hour=0, minute=0, second=0, microsecond=0)
                 end = target_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
             except ValueError:
                 return False, f'日付形式が正しくありません: {target_date}'
         else:
-            date_str = jst_now.strftime('%Y-%m-%d')
-            start = jst_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            try:
+                sync_days = max(1, min(int(days or 30), 90))
+            except (ValueError, TypeError):
+                sync_days = 30
+            date_str = f'直近{sync_days}日'
+            start = (jst_now - timedelta(days=sync_days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
             end = jst_now
 
         from_str = start.strftime('%Y%m%d%H%M%S')
@@ -233,90 +302,26 @@ def register_routes(app):
             print(f"[ERROR] Fetch HealthPlanet Data Failed: {e}")
             return False, f'Health Planetの取得に失敗しました: {str(e)[:100]}'
 
-        measurements = {}
-        for entry in data.get('data', []) if isinstance(data, dict) else []:
-            print(f"[DEBUG] Processing Entry: {entry}")
-            tag = str(entry.get('tag', ''))
-            keydata = str(entry.get('keydata', '')).strip()
-            date_value = str(entry.get('date', '')).strip()
-            if not tag or not keydata:
-                print(f"[DEBUG] Skipping Entry: {entry}")
-                continue
-            current = measurements.get(tag)
-            if not current or date_value > current.get('date', ''):
-                measurements[tag] = {'value': keydata, 'date': date_value}
-
-        latest_values = {k: v.get('value') for k, v in measurements.items()}
-        latest_date_value = max((v.get('date', '') for v in measurements.values()), default='')
-        print(f"[DEBUG] Latest Values: {latest_values}")
-        print(f"[DEBUG] Latest Date Value: {latest_date_value}")
-
-        content = _format_healthplanet_line(latest_values)
-        if not content:
-            range_start = (datetime.utcnow() + timedelta(hours=9) - timedelta(days=90)).strftime('%Y%m%d%H%M%S')
-            try:
-                # === 過去90日分から全タグを取得 ===
-                all_tags = ['6021', '6022', '6023', '6024', '6025', '6026', '6027', '6028', '6029']
-                try:
-                    data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, all_tags)
-                except Exception as e1:
-                    print(f"[WARN] Failed to fetch all tags (90day), trying core tags only: {e1}")
-                    core_tags = ['6021', '6022']
-                    data = _fetch_healthplanet_innerscan(access_token, range_start, to_str, core_tags)
-            except Exception as e:
-                return False, f'Health Planetの取得に失敗しました（90日フォールバック）: {str(e)[:100]}'
-            measurements = {}
-            for entry in data.get('data', []) if isinstance(data, dict) else []:
-                tag = str(entry.get('tag', ''))
-                keydata = str(entry.get('keydata', '')).strip()
-                date_value = str(entry.get('date', '')).strip()
-                if not tag or not keydata:
-                    continue
-                current = measurements.get(tag)
-                if not current or date_value > current.get('date', ''):
-                    measurements[tag] = {'value': keydata, 'date': date_value}
-            latest_values = {k: v.get('value') for k, v in measurements.items()}
-            latest_date_value = max((v.get('date', '') for v in measurements.values()), default='')
-            content = _format_healthplanet_line(latest_values)
-            if not content:
-                return False, 'データが見つかりませんでした。'
-
-        if latest_date_value:
-            try:
-                latest_dt = datetime.strptime(latest_date_value, '%Y%m%d%H%M')
-                date_str = latest_dt.strftime('%Y-%m-%d')
-            except Exception:
-                pass
+        grouped_measurements = _group_healthplanet_measurements_by_date(data)
+        if not grouped_measurements:
+            if target_date:
+                return False, f'{target_date} のHealth Planetデータが見つかりませんでした。'
+            return False, '指定期間のHealth Planetデータが見つかりませんでした。'
 
         conn = get_db()
         cursor = conn.cursor()
-        page = get_or_create_date_page(cursor, date_str)
-        if not page:
-            conn.close()
-            return False, '日付ページの作成に失敗しました。'
-        _upsert_healthplanet_block(cursor, page['id'], content)
-
-        # 体重・体脂肪率をpagesカラムに保存
-        weight_val = latest_values.get('6021')
-        body_fat_val = latest_values.get('6022')
-        try:
-            weight_float = float(weight_val) if weight_val else None
-        except (ValueError, TypeError):
-            weight_float = None
-        try:
-            body_fat_float = float(body_fat_val) if body_fat_val else None
-        except (ValueError, TypeError):
-            body_fat_float = None
-        if weight_float is not None or body_fat_float is not None:
-            now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-            cursor.execute(
-                'UPDATE pages SET weight = ?, body_fat = ?, weight_at = ? WHERE id = ?',
-                (weight_float, body_fat_float, now, page['id'])
-            )
+        synced_dates = []
+        for measured_date, measurements in sorted(grouped_measurements.items()):
+            if _save_healthplanet_measurements(cursor, measured_date, measurements):
+                synced_dates.append(measured_date)
 
         conn.commit()
         conn.close()
-        return True, '同期しました。'
+        if not synced_dates:
+            return False, '日付ページの作成または保存に失敗しました。'
+        if len(synced_dates) == 1:
+            return True, f'{synced_dates[0]} のHealth Planetデータを同期しました。'
+        return True, f'{len(synced_dates)}日分のHealth Planetデータを同期しました: ' + '、'.join(synced_dates)
 
     def sync_healthplanet_today():
         """今日のHealthPlaneデータを同期 (従来互換性)"""
@@ -1471,10 +1476,12 @@ def register_routes(app):
         if request.method == 'POST':
             data = request.json or {}
             target_date = data.get('date')
+            days = data.get('days')
         else:
             target_date = request.args.get('date')
+            days = request.args.get('days')
         
-        ok, message = sync_healthplanet_for_date(target_date)
+        ok, message = sync_healthplanet_for_date(target_date, days=days)
         status = 200 if ok else 400
         return jsonify({'message': message}), status
 
