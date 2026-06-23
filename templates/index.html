@@ -337,7 +337,7 @@
         }
         
         #sidebar {
-            width: 300px;
+            width: 360px;
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
@@ -354,6 +354,106 @@
         
         #sidebar-toggle { display: none; }
         #sidebar-overlay { display: none; }
+
+        .calendar-panel {
+            padding: 14px 16px 16px;
+        }
+
+        .calendar-month-row {
+            margin-bottom: 10px;
+        }
+
+        #calendar-header {
+            font-size: 18px !important;
+            line-height: 1.35;
+            font-weight: 800;
+            color: #374151;
+            letter-spacing: 0;
+        }
+
+        #calendar-grid {
+            gap: 6px;
+        }
+
+        .calendar-cell {
+            min-height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 800;
+            color: #111827;
+            cursor: pointer;
+        }
+
+        .calendar-cell:hover {
+            background-color: #eef2ff;
+        }
+
+        .sidebar-quick-links {
+            padding: 10px 12px;
+            border-top: 1px solid #e5e7eb;
+            display: grid;
+            gap: 8px;
+        }
+
+        .sidebar-quick-link {
+            min-height: 44px;
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+
+        .sidebar-actions {
+            padding: 10px 12px 14px;
+            border-top: 1px solid #e5e7eb;
+            display: grid;
+            gap: 8px;
+            position: relative;
+        }
+
+        .sidebar-primary-action {
+            min-height: 42px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .sidebar-settings-menu {
+            display: none;
+            position: absolute;
+            left: 12px;
+            right: 12px;
+            bottom: 62px;
+            z-index: 30;
+            padding: 8px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #ffffff;
+            box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16);
+        }
+
+        .sidebar-settings-menu.active {
+            display: grid;
+            gap: 4px;
+        }
+
+        .sidebar-settings-menu button {
+            min-height: 40px;
+        }
+
+        html.dark #calendar-header,
+        html.dark .calendar-cell {
+            color: #e5e7eb;
+        }
+
+        html.dark .calendar-cell:hover {
+            background-color: #1f2937;
+        }
+
+        html.dark .sidebar-settings-menu {
+            background: #111827;
+            border-color: #374151;
+        }
         
         /* モバイル用（768px未満） */
         @media (max-width: 768px) {
@@ -365,8 +465,8 @@
                 position: fixed;
                 left: 0;
                 top: 0;
-                width: 100%;
-                max-width: 300px;
+                width: min(92vw, 380px);
+                max-width: min(92vw, 380px);
                 height: 100vh;
                 z-index: 50;
                 transform: translateX(-100%);
@@ -414,11 +514,11 @@
             <button onclick="openSearch()" class="text-gray-400 hover:text-gray-600" title="検索">🔍</button>
         </div>
         
-        <div class="px-4 py-2 border-b border-gray-200">
-            <div class="flex justify-between items-center mb-2">
-                <button onclick="changeMonth(-1)" class="text-gray-400 hover:text-gray-600 text-xs">◀</button>
-                <span id="calendar-header" class="text-xs font-bold text-gray-600"></span>
-                <button onclick="changeMonth(1)" class="text-gray-400 hover:text-gray-600 text-xs">▶</button>
+        <div class="calendar-panel border-b border-gray-200">
+            <div class="calendar-month-row flex justify-between items-center">
+                <button onclick="changeMonth(-1)" class="text-gray-400 hover:text-gray-600 text-lg px-2 py-1 rounded">◀</button>
+                <span id="calendar-header" class="font-bold text-gray-700"></span>
+                <button onclick="changeMonth(1)" class="text-gray-400 hover:text-gray-600 text-lg px-2 py-1 rounded">▶</button>
             </div>
             <div class="grid grid-cols-7 gap-1 text-xs text-gray-400 mb-1">
                 <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
@@ -430,33 +530,41 @@
         </div>
 
         <!-- あとで調べる / 読了リンク -->
-        <div class="px-2 py-2 border-t border-gray-200 space-y-1">
-            <a href="/inbox" class="w-full text-left px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded flex items-center gap-2 bg-blue-50 cursor-pointer">
+        <div class="sidebar-quick-links">
+            <a href="/inbox" id="inbox-link" class="sidebar-quick-link w-full text-left text-sm font-medium text-blue-600 hover:bg-blue-50 rounded flex items-center gap-2 bg-blue-50 cursor-pointer">
                 <span>🔖</span> あとで調べる
             </a>
-            <a href="/finished" class="w-full text-left px-3 py-2 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded flex items-center gap-2 bg-purple-50 cursor-pointer">
+            <a href="/finished" class="sidebar-quick-link w-full text-left text-sm font-medium text-purple-600 hover:bg-purple-50 rounded flex items-center gap-2 bg-purple-50 cursor-pointer">
                 <span>📚</span> 読了
             </a>
         </div>
 
-        <div class="p-2 border-t border-gray-200 space-y-1">
-            <button onclick="createPage()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
+        <div class="sidebar-actions">
+            <button onclick="createPage()" class="sidebar-primary-action w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
                 <span class="mr-2">+</span> ページを追加
             </button>
-            <button onclick="createFolder()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
+            <button onclick="createFolder()" class="sidebar-primary-action w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
                 <span class="mr-2">📁</span> フォルダを追加
             </button>
-            <button onclick="showTemplateMenu()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
-                <span class="mr-2">⭐</span> テンプレート
-            </button>
-            <button onclick="showTrash()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
-                <span class="mr-2">🗑️</span> ゴミ箱
-            </button>
-            <button onclick="showExportImportMenu()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
-                <span class="mr-2">💾</span> インポート/エクスポート
-            </button>
-            <button onclick="showHealthPlanetMenu()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
-                <span class="mr-2">⚖️</span> Health Planet
+
+            <div id="sidebar-settings-menu" class="sidebar-settings-menu">
+                <button onclick="showTemplateMenu(); toggleSidebarSettings(false)" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                    <span class="mr-2">⭐</span> テンプレート
+                </button>
+                <button onclick="showExportImportMenu(); toggleSidebarSettings(false)" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                    <span class="mr-2">💾</span> インポート/エクスポート
+                </button>
+                <button onclick="showHealthPlanetMenu(); toggleSidebarSettings(false)" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                    <span class="mr-2">⚖️</span> Health Planet
+                </button>
+                <button onclick="showTrash(); toggleSidebarSettings(false)" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                    <span class="mr-2">🗑️</span> ゴミ箱
+                </button>
+            </div>
+
+            <button onclick="toggleSidebarSettings()" class="sidebar-primary-action w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center justify-between">
+                <span><span class="mr-2">⚙️</span> 設定</span>
+                <span class="text-gray-400">⌃</span>
             </button>
         </div>
     </div>
@@ -847,6 +955,20 @@
             sidebar.classList.remove('active');
             overlay.classList.remove('active');
         }
+
+        function toggleSidebarSettings(force) {
+            const menu = document.getElementById('sidebar-settings-menu');
+            if (!menu) return;
+            const shouldOpen = typeof force === 'boolean' ? force : !menu.classList.contains('active');
+            menu.classList.toggle('active', shouldOpen);
+        }
+
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('sidebar-settings-menu');
+            if (!menu || !menu.classList.contains('active')) return;
+            if (event.target.closest('.sidebar-actions')) return;
+            menu.classList.remove('active');
+        });
         let currentCalendarDate = new Date(); // カレンダー表示用
 
         // ブロックメニューの表示/非表示
