@@ -112,8 +112,23 @@ def build_progress_summary(conn, period_days=30, today=None):
         return resolved
 
     weight_by_date = {}
-    run_sources = defaultdict(set)
-    running_by_date = defaultdict(float)
+    structured_run_sources = defaultdict(set)
+    fallback_run_sources = defaultdict(set)
+    structured_running_by_date = defaultdict(float)
+    fallback_running_by_date = defaultdict(float)
+
+    def collect_running(page_date, value):
+        distances = _running_distances(value)
+        if not distances:
+            return
+        normalized = _normalize_text(value).casefold()
+        is_structured = bool(LABELED_DISTANCE_RE.search(normalized))
+        sources = structured_run_sources if is_structured else fallback_run_sources
+        totals = structured_running_by_date if is_structured else fallback_running_by_date
+        source_key = (normalized, tuple(distances))
+        if source_key not in sources[page_date]:
+            totals[page_date] += sum(distances)
+            sources[page_date].add(source_key)
 
     for page in pages:
         page_date = date_for_page(page['id'])
@@ -126,13 +141,7 @@ def build_progress_summary(conn, period_days=30, today=None):
             except (TypeError, ValueError):
                 pass
 
-        distances = _running_distances(page.get('title'))
-        if distances:
-            normalized = _normalize_text(page.get('title')).casefold()
-            source_key = (normalized, tuple(distances))
-            if source_key not in run_sources[page_date]:
-                running_by_date[page_date] += sum(distances)
-                run_sources[page_date].add(source_key)
+        collect_running(page_date, page.get('title'))
 
     cursor.execute(
         """
@@ -145,14 +154,12 @@ def build_progress_summary(conn, period_days=30, today=None):
         page_date = date_for_page(row['page_id'])
         if not page_date:
             continue
-        distances = _running_distances(row['content'])
-        if not distances:
-            continue
-        normalized = _normalize_text(row['content']).casefold()
-        source_key = (normalized, tuple(distances))
-        if source_key not in run_sources[page_date]:
-            running_by_date[page_date] += sum(distances)
-            run_sources[page_date].add(source_key)
+        collect_running(page_date, row['content'])
+
+    # RunTrack のような「距離: 5.5km」がある日は、その構造化記録を正とする。
+    # 日記本文に書かれた予定距離などとの二重加算を防ぐ。
+    running_by_date = dict(fallback_running_by_date)
+    running_by_date.update(structured_running_by_date)
 
     current_weights = [
         {'date': point_date.isoformat(), 'value': _round(value)}

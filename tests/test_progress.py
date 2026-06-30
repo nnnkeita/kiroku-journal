@@ -91,6 +91,27 @@ class ProgressSummaryTest(unittest.TestCase):
         self.assertEqual(result['running']['total_distance'], 5.5)
         self.assertEqual(result['running']['average_distance'], 5.5)
 
+    def test_prefers_structured_runtrack_distance_over_diary_prose(self):
+        self.conn.executemany(
+            'INSERT INTO pages (id, title, parent_id, weight) VALUES (?, ?, ?, ?)',
+            [
+                (1, '2026年6月29日', None, None),
+                (2, '日記', 1, None),
+            ],
+        )
+        self.conn.executemany(
+            'INSERT INTO blocks (id, page_id, content) VALUES (?, ?, ?)',
+            [
+                (1, 2, '今日はランニング。予定は5kmだったが6.5km走った。'),
+                (2, 2, '🏃 ランニング記録 📏 距離: 6.48 km'),
+            ],
+        )
+
+        result = build_progress_summary(self.conn, 30, today=date(2026, 6, 30))
+
+        self.assertEqual(result['running']['total_distance'], 6.5)
+        self.assertEqual(result['running']['run_count'], 1)
+
     def test_compares_with_previous_period(self):
         self.conn.executemany(
             'INSERT INTO pages (id, title, parent_id, weight) VALUES (?, ?, ?, ?)',
