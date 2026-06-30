@@ -1,7 +1,6 @@
 // Service Worker for PWA
-const CACHE_NAME = 'kiroku-journal-v2';
+const CACHE_NAME = 'kiroku-journal-v3';
 const urlsToCache = [
-  '/',
   '/static/manifest.json'
 ];
 
@@ -13,14 +12,21 @@ self.addEventListener('install', (event) => {
         return cache.addAll(urlsToCache);
       })
   );
+  self.skipWaiting();
 });
 
-// リクエスト時にキャッシュから返す
+// ページ本体は更新を即反映するためネットワーク優先にする
 self.addEventListener('fetch', (event) => {
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        // キャッシュがあればキャッシュから、なければネットワークから取得
         return response || fetch(event.request);
       })
   );
@@ -37,6 +43,6 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });

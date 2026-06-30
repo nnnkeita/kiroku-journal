@@ -305,6 +305,245 @@
             background-color: #164e3f !important;
         }
 
+        /* 成長ダッシュボード */
+        .progress-dashboard {
+            margin: 0 0 24px;
+            padding: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.78);
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.74);
+            box-shadow: 0 18px 46px rgba(14, 116, 144, 0.12);
+            backdrop-filter: blur(16px);
+        }
+
+        .progress-dashboard-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .progress-eyebrow {
+            color: #0f766e;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .progress-title {
+            margin-top: 3px;
+            color: #0f172a;
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .progress-periods {
+            display: inline-flex;
+            gap: 4px;
+            padding: 4px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            border-radius: 999px;
+            background: rgba(241, 245, 249, 0.8);
+        }
+
+        .progress-period-button {
+            min-width: 46px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 700;
+            transition: 0.18s ease;
+        }
+
+        .progress-period-button:hover {
+            color: #0f766e;
+        }
+
+        .progress-period-button.active {
+            color: #ffffff;
+            background: #0f766e;
+            box-shadow: 0 5px 12px rgba(15, 118, 110, 0.22);
+        }
+
+        .progress-insight {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin-bottom: 14px;
+            padding: 10px 12px;
+            border-radius: 13px;
+            color: #155e75;
+            background: rgba(207, 250, 254, 0.68);
+            font-size: 13px;
+            font-weight: 650;
+        }
+
+        .progress-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .progress-card {
+            min-width: 0;
+            padding: 16px;
+            border: 1px solid rgba(226, 232, 240, 0.92);
+            border-radius: 17px;
+            background: rgba(255, 255, 255, 0.88);
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+        }
+
+        .progress-card-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .progress-card-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #475569;
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .progress-card-icon {
+            display: inline-flex;
+            width: 30px;
+            height: 30px;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            background: #ecfeff;
+        }
+
+        .progress-stat {
+            color: #0f172a;
+            font-size: 29px;
+            font-weight: 850;
+            letter-spacing: -0.04em;
+        }
+
+        .progress-stat-unit {
+            margin-left: 3px;
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0;
+        }
+
+        .progress-delta {
+            padding: 4px 8px;
+            border-radius: 999px;
+            color: #0369a1;
+            background: #e0f2fe;
+            font-size: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .progress-delta.positive {
+            color: #047857;
+            background: #d1fae5;
+        }
+
+        .progress-delta.negative {
+            color: #b45309;
+            background: #fef3c7;
+        }
+
+        .progress-chart {
+            width: 100%;
+            height: 128px;
+            margin-top: 8px;
+            overflow: visible;
+        }
+
+        .progress-chart-empty {
+            display: flex;
+            height: 128px;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .progress-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .progress-metric {
+            padding: 7px 8px;
+            border-radius: 10px;
+            background: #f8fafc;
+        }
+
+        .progress-metric-label {
+            display: block;
+            color: #94a3b8;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .progress-metric-value {
+            display: block;
+            margin-top: 2px;
+            color: #334155;
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .progress-loading {
+            animation: progressPulse 1.4s ease-in-out infinite;
+        }
+
+        @keyframes progressPulse {
+            0%, 100% { opacity: 0.52; }
+            50% { opacity: 1; }
+        }
+
+        html.dark .progress-dashboard {
+            border-color: rgba(51, 65, 85, 0.9);
+            background: rgba(15, 23, 42, 0.76);
+            box-shadow: 0 18px 46px rgba(0, 0, 0, 0.28);
+        }
+
+        html.dark .progress-title,
+        html.dark .progress-stat {
+            color: #f8fafc;
+        }
+
+        html.dark .progress-card {
+            border-color: #334155;
+            background: rgba(30, 41, 59, 0.86);
+        }
+
+        html.dark .progress-card-label,
+        html.dark .progress-metric-value {
+            color: #cbd5e1;
+        }
+
+        html.dark .progress-card-icon,
+        html.dark .progress-metric,
+        html.dark .progress-periods {
+            background: rgba(15, 23, 42, 0.82);
+        }
+
+        html.dark .progress-insight {
+            color: #a5f3fc;
+            background: rgba(22, 78, 99, 0.52);
+        }
+
         /* 青空と雲の背景（通常モード） */
         html:not(.dark) #editor-container {
             background-color: #e9f7ff;
@@ -337,7 +576,7 @@
         }
         
         #sidebar {
-            width: 300px;
+            width: 360px;
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
@@ -354,6 +593,106 @@
         
         #sidebar-toggle { display: none; }
         #sidebar-overlay { display: none; }
+
+        .calendar-panel {
+            padding: 14px 16px 16px;
+        }
+
+        .calendar-month-row {
+            margin-bottom: 10px;
+        }
+
+        #calendar-header {
+            font-size: 18px !important;
+            line-height: 1.35;
+            font-weight: 800;
+            color: #374151;
+            letter-spacing: 0;
+        }
+
+        #calendar-grid {
+            gap: 6px;
+        }
+
+        .calendar-cell {
+            min-height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 800;
+            color: #111827;
+            cursor: pointer;
+        }
+
+        .calendar-cell:hover {
+            background-color: #eef2ff;
+        }
+
+        .sidebar-quick-links {
+            padding: 10px 12px;
+            border-top: 1px solid #e5e7eb;
+            display: grid;
+            gap: 8px;
+        }
+
+        .sidebar-quick-link {
+            min-height: 44px;
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+
+        .sidebar-actions {
+            padding: 10px 12px 14px;
+            border-top: 1px solid #e5e7eb;
+            display: grid;
+            gap: 8px;
+            position: relative;
+        }
+
+        .sidebar-primary-action {
+            min-height: 42px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .sidebar-settings-menu {
+            display: none;
+            position: absolute;
+            left: 12px;
+            right: 12px;
+            bottom: 62px;
+            z-index: 30;
+            padding: 8px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #ffffff;
+            box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16);
+        }
+
+        .sidebar-settings-menu.active {
+            display: grid;
+            gap: 4px;
+        }
+
+        .sidebar-settings-menu button {
+            min-height: 40px;
+        }
+
+        html.dark #calendar-header,
+        html.dark .calendar-cell {
+            color: #e5e7eb;
+        }
+
+        html.dark .calendar-cell:hover {
+            background-color: #1f2937;
+        }
+
+        html.dark .sidebar-settings-menu {
+            background: #111827;
+            border-color: #374151;
+        }
         
         /* モバイル用（768px未満） */
         @media (max-width: 768px) {
@@ -365,8 +704,8 @@
                 position: fixed;
                 left: 0;
                 top: 0;
-                width: 100%;
-                max-width: 300px;
+                width: min(92vw, 380px);
+                max-width: min(92vw, 380px);
                 height: 100vh;
                 z-index: 50;
                 transform: translateX(-100%);
@@ -403,6 +742,25 @@
                 padding-left: 1rem !important;
                 padding-right: 1rem !important;
             }
+
+            .progress-dashboard {
+                padding: 14px;
+                border-radius: 18px;
+            }
+
+            .progress-dashboard-header {
+                align-items: stretch;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .progress-periods {
+                align-self: flex-start;
+            }
+
+            .progress-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -414,11 +772,11 @@
             <button onclick="openSearch()" class="text-gray-400 hover:text-gray-600" title="検索">🔍</button>
         </div>
         
-        <div class="px-4 py-2 border-b border-gray-200">
-            <div class="flex justify-between items-center mb-2">
-                <button onclick="changeMonth(-1)" class="text-gray-400 hover:text-gray-600 text-xs">◀</button>
-                <span id="calendar-header" class="text-xs font-bold text-gray-600"></span>
-                <button onclick="changeMonth(1)" class="text-gray-400 hover:text-gray-600 text-xs">▶</button>
+        <div class="calendar-panel border-b border-gray-200">
+            <div class="calendar-month-row flex justify-between items-center">
+                <button onclick="changeMonth(-1)" class="text-gray-400 hover:text-gray-600 text-lg px-2 py-1 rounded">◀</button>
+                <span id="calendar-header" class="font-bold text-gray-700"></span>
+                <button onclick="changeMonth(1)" class="text-gray-400 hover:text-gray-600 text-lg px-2 py-1 rounded">▶</button>
             </div>
             <div class="grid grid-cols-7 gap-1 text-xs text-gray-400 mb-1">
                 <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
@@ -430,33 +788,41 @@
         </div>
 
         <!-- あとで調べる / 読了リンク -->
-        <div class="px-2 py-2 border-t border-gray-200 space-y-1">
-            <a href="/inbox" class="w-full text-left px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded flex items-center gap-2 bg-blue-50 cursor-pointer">
+        <div class="sidebar-quick-links">
+            <a href="/inbox" id="inbox-link" class="sidebar-quick-link w-full text-left text-sm font-medium text-blue-600 hover:bg-blue-50 rounded flex items-center gap-2 bg-blue-50 cursor-pointer">
                 <span>🔖</span> あとで調べる
             </a>
-            <a href="/finished" class="w-full text-left px-3 py-2 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded flex items-center gap-2 bg-purple-50 cursor-pointer">
+            <a href="/finished" class="sidebar-quick-link w-full text-left text-sm font-medium text-purple-600 hover:bg-purple-50 rounded flex items-center gap-2 bg-purple-50 cursor-pointer">
                 <span>📚</span> 読了
             </a>
         </div>
 
-        <div class="p-2 border-t border-gray-200 space-y-1">
-            <button onclick="createPage()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
+        <div class="sidebar-actions">
+            <button onclick="createPage()" class="sidebar-primary-action w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
                 <span class="mr-2">+</span> ページを追加
             </button>
-            <button onclick="createFolder()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
+            <button onclick="createFolder()" class="sidebar-primary-action w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
                 <span class="mr-2">📁</span> フォルダを追加
             </button>
-            <button onclick="showTemplateMenu()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
-                <span class="mr-2">⭐</span> テンプレート
-            </button>
-            <button onclick="showTrash()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
-                <span class="mr-2">🗑️</span> ゴミ箱
-            </button>
-            <button onclick="showExportImportMenu()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
-                <span class="mr-2">💾</span> インポート/エクスポート
-            </button>
-            <button onclick="showHealthPlanetMenu()" class="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded flex items-center">
-                <span class="mr-2">⚖️</span> Health Planet
+
+            <div id="sidebar-settings-menu" class="sidebar-settings-menu">
+                <button onclick="showTemplateMenu(); toggleSidebarSettings(false)" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                    <span class="mr-2">⭐</span> テンプレート
+                </button>
+                <button onclick="showExportImportMenu(); toggleSidebarSettings(false)" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                    <span class="mr-2">💾</span> インポート/エクスポート
+                </button>
+                <button onclick="showHealthPlanetMenu(); toggleSidebarSettings(false)" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                    <span class="mr-2">⚖️</span> Health Planet
+                </button>
+                <button onclick="showTrash(); toggleSidebarSettings(false)" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center">
+                    <span class="mr-2">🗑️</span> ゴミ箱
+                </button>
+            </div>
+
+            <button onclick="toggleSidebarSettings()" class="sidebar-primary-action w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center justify-between">
+                <span><span class="mr-2">⚙️</span> 設定</span>
+                <span class="text-gray-400">⌃</span>
             </button>
         </div>
     </div>
@@ -613,6 +979,67 @@
                               rows="3"
                               style="min-height: 80px;"></textarea>
                 </div>
+
+                <section id="progress-dashboard" class="progress-dashboard hidden" aria-labelledby="progress-dashboard-title">
+                    <div class="progress-dashboard-header">
+                        <div>
+                            <div class="progress-eyebrow">Your progress</div>
+                            <h2 id="progress-dashboard-title" class="progress-title">積み重ねが、見えてきました</h2>
+                        </div>
+                        <div class="progress-periods" role="group" aria-label="グラフの表示期間">
+                            <button type="button" class="progress-period-button active" data-days="30" onclick="loadProgressDashboard(30)">1か月</button>
+                            <button type="button" class="progress-period-button" data-days="90" onclick="loadProgressDashboard(90)">3か月</button>
+                            <button type="button" class="progress-period-button" data-days="365" onclick="loadProgressDashboard(365)">1年</button>
+                        </div>
+                    </div>
+
+                    <div id="progress-insight" class="progress-insight">
+                        <span>🌱</span>
+                        <span id="progress-insight-text">記録を読み込んでいます...</span>
+                    </div>
+
+                    <div class="progress-grid">
+                        <article class="progress-card">
+                            <div class="progress-card-heading">
+                                <div class="progress-card-label">
+                                    <span class="progress-card-icon">⚖️</span>
+                                    <span>体重の変化</span>
+                                </div>
+                                <span id="weight-progress-delta" class="progress-delta">—</span>
+                            </div>
+                            <div id="weight-progress-value" class="progress-stat">—<span class="progress-stat-unit">kg</span></div>
+                            <svg id="weight-progress-chart" class="progress-chart" viewBox="0 0 520 150" preserveAspectRatio="none" role="img" aria-label="体重の推移"></svg>
+                            <div id="weight-progress-empty" class="progress-chart-empty hidden">体重が記録されるとグラフになります</div>
+                        </article>
+
+                        <article class="progress-card">
+                            <div class="progress-card-heading">
+                                <div class="progress-card-label">
+                                    <span class="progress-card-icon">🏃</span>
+                                    <span>ランニング</span>
+                                </div>
+                                <span id="running-progress-delta" class="progress-delta">—</span>
+                            </div>
+                            <div id="running-progress-value" class="progress-stat">—<span class="progress-stat-unit">km</span></div>
+                            <svg id="running-progress-chart" class="progress-chart" viewBox="0 0 520 150" preserveAspectRatio="none" role="img" aria-label="ランニング距離の推移"></svg>
+                            <div id="running-progress-empty" class="progress-chart-empty hidden">距離を記録するとグラフになります</div>
+                            <div class="progress-metrics">
+                                <div class="progress-metric">
+                                    <span class="progress-metric-label">走った日</span>
+                                    <span id="running-count" class="progress-metric-value">—</span>
+                                </div>
+                                <div class="progress-metric">
+                                    <span class="progress-metric-label">平均距離</span>
+                                    <span id="running-average" class="progress-metric-value">—</span>
+                                </div>
+                                <div class="progress-metric">
+                                    <span class="progress-metric-label">最長継続</span>
+                                    <span id="running-streak" class="progress-metric-value">—</span>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                </section>
 
                 
                 <!-- 通常表示（詳細タブ） -->
@@ -818,6 +1245,8 @@
         let visiblePageOrder = []; // 現在表示中の順序（フラット）
         let currentBlocks = [];
         let currentCategoryTitle = null;
+        let progressPeriod = 30;
+        let progressRequestToken = 0;
         let focusedBlockId = null;
         let isKnowledgePage = false;
         let isFoodPage = false;
@@ -847,6 +1276,20 @@
             sidebar.classList.remove('active');
             overlay.classList.remove('active');
         }
+
+        function toggleSidebarSettings(force) {
+            const menu = document.getElementById('sidebar-settings-menu');
+            if (!menu) return;
+            const shouldOpen = typeof force === 'boolean' ? force : !menu.classList.contains('active');
+            menu.classList.toggle('active', shouldOpen);
+        }
+
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('sidebar-settings-menu');
+            if (!menu || !menu.classList.contains('active')) return;
+            if (event.target.closest('.sidebar-actions')) return;
+            menu.classList.remove('active');
+        });
         let currentCalendarDate = new Date(); // カレンダー表示用
 
         // ブロックメニューの表示/非表示
@@ -1956,6 +2399,227 @@
         // ページキャッシュ（メモリ）
         const pageCache = {};
         const CACHE_SIZE = 20; // 最大20ページをキャッシュ
+
+        function setProgressDelta(elementId, value, suffix, emptyText = '比較データなし') {
+            const element = document.getElementById(elementId);
+            element.classList.remove('positive', 'negative');
+            if (value === null || value === undefined) {
+                element.textContent = emptyText;
+                return;
+            }
+            const numericValue = Number(value);
+            const prefix = numericValue > 0 ? '+' : '';
+            element.textContent = `${prefix}${numericValue.toFixed(1)}${suffix}`;
+            if (numericValue > 0) element.classList.add('positive');
+            if (numericValue < 0) element.classList.add('negative');
+        }
+
+        function formatProgressDate(dateText) {
+            const parts = String(dateText || '').split('-');
+            return parts.length === 3 ? `${Number(parts[1])}/${Number(parts[2])}` : '';
+        }
+
+        function renderWeightProgressChart(points) {
+            const svg = document.getElementById('weight-progress-chart');
+            const empty = document.getElementById('weight-progress-empty');
+            if (!Array.isArray(points) || points.length === 0) {
+                svg.classList.add('hidden');
+                empty.classList.remove('hidden');
+                return;
+            }
+
+            svg.classList.remove('hidden');
+            empty.classList.add('hidden');
+            const width = 520;
+            const height = 150;
+            const left = 16;
+            const right = 504;
+            const top = 14;
+            const bottom = 126;
+            const values = points.map(point => Number(point.value));
+            let min = Math.min(...values);
+            let max = Math.max(...values);
+            const padding = Math.max((max - min) * 0.22, 0.45);
+            min -= padding;
+            max += padding;
+            const x = index => points.length === 1
+                ? width / 2
+                : left + (index / (points.length - 1)) * (right - left);
+            const y = value => bottom - ((value - min) / (max - min)) * (bottom - top);
+            const linePoints = points.map((point, index) => `${x(index).toFixed(1)},${y(Number(point.value)).toFixed(1)}`).join(' ');
+            const areaPoints = `${left},${bottom} ${linePoints} ${right},${bottom}`;
+            const lastIndex = points.length - 1;
+            const grid = [top, (top + bottom) / 2, bottom]
+                .map(gridY => `<line x1="${left}" y1="${gridY}" x2="${right}" y2="${gridY}" stroke="#cbd5e1" stroke-opacity=".42" stroke-dasharray="4 6"/>`)
+                .join('');
+            svg.innerHTML = `
+                <defs>
+                    <linearGradient id="weight-area-gradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#14b8a6" stop-opacity=".30"/>
+                        <stop offset="100%" stop-color="#14b8a6" stop-opacity=".02"/>
+                    </linearGradient>
+                </defs>
+                ${grid}
+                <polygon points="${areaPoints}" fill="url(#weight-area-gradient)"/>
+                <polyline points="${linePoints}" fill="none" stroke="#0f766e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="${x(lastIndex)}" cy="${y(values[lastIndex])}" r="5" fill="#ffffff" stroke="#0f766e" stroke-width="3"/>
+                <text x="${left}" y="146" fill="#94a3b8" font-size="11">${formatProgressDate(points[0].date)}</text>
+                <text x="${right}" y="146" fill="#94a3b8" font-size="11" text-anchor="end">${formatProgressDate(points[lastIndex].date)}</text>
+            `;
+        }
+
+        function buildRunningBuckets(points, range, days) {
+            const start = new Date(`${range.from}T00:00:00`);
+            const end = new Date(`${range.to}T00:00:00`);
+            const pointMap = new Map((points || []).map(point => [point.date, Number(point.distance)]));
+            const buckets = [];
+
+            if (days <= 30) {
+                for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+                    const key = [
+                        cursor.getFullYear(),
+                        String(cursor.getMonth() + 1).padStart(2, '0'),
+                        String(cursor.getDate()).padStart(2, '0')
+                    ].join('-');
+                    buckets.push({ label: `${cursor.getMonth() + 1}/${cursor.getDate()}`, value: pointMap.get(key) || 0 });
+                }
+                return buckets;
+            }
+
+            if (days <= 90) {
+                let cursor = new Date(start);
+                while (cursor <= end) {
+                    const bucketStart = new Date(cursor);
+                    let value = 0;
+                    for (let offset = 0; offset < 7 && cursor <= end; offset += 1) {
+                        const key = [
+                            cursor.getFullYear(),
+                            String(cursor.getMonth() + 1).padStart(2, '0'),
+                            String(cursor.getDate()).padStart(2, '0')
+                        ].join('-');
+                        value += pointMap.get(key) || 0;
+                        cursor.setDate(cursor.getDate() + 1);
+                    }
+                    buckets.push({ label: `${bucketStart.getMonth() + 1}/${bucketStart.getDate()}`, value });
+                }
+                return buckets;
+            }
+
+            const monthMap = new Map();
+            for (const point of points || []) {
+                const month = String(point.date).slice(0, 7);
+                monthMap.set(month, (monthMap.get(month) || 0) + Number(point.distance));
+            }
+            let monthCursor = new Date(start.getFullYear(), start.getMonth(), 1);
+            const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+            while (monthCursor <= endMonth) {
+                const key = `${monthCursor.getFullYear()}-${String(monthCursor.getMonth() + 1).padStart(2, '0')}`;
+                buckets.push({ label: `${monthCursor.getMonth() + 1}月`, value: monthMap.get(key) || 0 });
+                monthCursor.setMonth(monthCursor.getMonth() + 1);
+            }
+            return buckets;
+        }
+
+        function renderRunningProgressChart(points, range, days) {
+            const svg = document.getElementById('running-progress-chart');
+            const empty = document.getElementById('running-progress-empty');
+            const buckets = buildRunningBuckets(points, range, days);
+            const maxValue = Math.max(0, ...buckets.map(bucket => bucket.value));
+            if (!maxValue) {
+                svg.classList.add('hidden');
+                empty.classList.remove('hidden');
+                return;
+            }
+
+            svg.classList.remove('hidden');
+            empty.classList.add('hidden');
+            const left = 16;
+            const right = 504;
+            const top = 14;
+            const bottom = 126;
+            const slot = (right - left) / buckets.length;
+            const barWidth = Math.max(3, slot * 0.58);
+            const bars = buckets.map((bucket, index) => {
+                const barHeight = bucket.value > 0
+                    ? Math.max(3, (bucket.value / maxValue) * (bottom - top))
+                    : 0;
+                const x = left + index * slot + (slot - barWidth) / 2;
+                return `<rect x="${x.toFixed(1)}" y="${(bottom - barHeight).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="${Math.min(5, barWidth / 2)}" fill="#38bdf8" opacity="${bucket.value > 0 ? '.9' : '0'}"/>`;
+            }).join('');
+            svg.innerHTML = `
+                <line x1="${left}" y1="${bottom}" x2="${right}" y2="${bottom}" stroke="#cbd5e1" stroke-opacity=".6"/>
+                <line x1="${left}" y1="${(top + bottom) / 2}" x2="${right}" y2="${(top + bottom) / 2}" stroke="#cbd5e1" stroke-opacity=".35" stroke-dasharray="4 6"/>
+                ${bars}
+                <text x="${left}" y="146" fill="#94a3b8" font-size="11">${buckets[0]?.label || ''}</text>
+                <text x="${right}" y="146" fill="#94a3b8" font-size="11" text-anchor="end">${buckets[buckets.length - 1]?.label || ''}</text>
+            `;
+        }
+
+        function progressInsight(summary) {
+            const weight = summary.weight || {};
+            const running = summary.running || {};
+            if (running.change_percent !== null && running.change_percent > 0) {
+                return `前の${summary.period_days}日間より、走行距離が${running.change_percent.toFixed(1)}%伸びています。`;
+            }
+            if (weight.change !== null && Math.abs(weight.change) >= 0.1) {
+                const direction = weight.change > 0 ? '増え' : '減り';
+                return `この期間で体重が${Math.abs(weight.change).toFixed(1)}kg${direction}ました。変化がきちんと記録されています。`;
+            }
+            if (running.total_distance > 0) {
+                return `${summary.period_days}日間で${running.total_distance.toFixed(1)}km。積み重ねた距離は、ちゃんと前へ進んだ証です。`;
+            }
+            if (weight.latest !== null) {
+                return '記録は小さくても、続けるほど変化の線がくっきりしてきます。';
+            }
+            return '体重やランニング距離を記録すると、ここに成長の線が描かれます。';
+        }
+
+        async function loadProgressDashboard(days = 30) {
+            progressPeriod = [30, 90, 365].includes(Number(days)) ? Number(days) : 30;
+            const requestToken = ++progressRequestToken;
+            document.querySelectorAll('.progress-period-button').forEach(button => {
+                const isActive = Number(button.dataset.days) === progressPeriod;
+                button.classList.toggle('active', isActive);
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+
+            const dashboard = document.getElementById('progress-dashboard');
+            const insightText = document.getElementById('progress-insight-text');
+            dashboard.classList.add('progress-loading');
+            insightText.textContent = '記録を読み込んでいます...';
+
+            try {
+                const response = await fetch(`/api/progress-summary?days=${progressPeriod}`, { cache: 'no-store' });
+                if (!response.ok) throw new Error('progress summary request failed');
+                const summary = await response.json();
+                if (requestToken !== progressRequestToken) return;
+
+                const weight = summary.weight || {};
+                const running = summary.running || {};
+                document.getElementById('weight-progress-value').innerHTML = weight.latest === null
+                    ? `—<span class="progress-stat-unit">kg</span>`
+                    : `${Number(weight.latest).toFixed(1)}<span class="progress-stat-unit">kg</span>`;
+                setProgressDelta('weight-progress-delta', weight.change, 'kg');
+                renderWeightProgressChart(weight.points || []);
+
+                document.getElementById('running-progress-value').innerHTML =
+                    `${Number(running.total_distance || 0).toFixed(1)}<span class="progress-stat-unit">km</span>`;
+                setProgressDelta('running-progress-delta', running.change_percent, '%', '前期間の記録なし');
+                document.getElementById('running-count').textContent = `${running.run_count || 0}日`;
+                document.getElementById('running-average').textContent = `${Number(running.average_distance || 0).toFixed(1)}km`;
+                document.getElementById('running-streak').textContent = `${running.best_streak || 0}日`;
+                renderRunningProgressChart(running.points || [], summary.range, summary.period_days);
+                insightText.textContent = progressInsight(summary);
+            } catch (error) {
+                if (requestToken !== progressRequestToken) return;
+                console.warn('Failed to load progress dashboard:', error);
+                insightText.textContent = 'グラフを読み込めませんでした。少し時間をおいて再度お試しください。';
+            } finally {
+                if (requestToken === progressRequestToken) {
+                    dashboard.classList.remove('progress-loading');
+                }
+            }
+        }
         
         async function loadPage(id) {
             const loadToken = ++pageLoadToken;
@@ -2067,14 +2731,17 @@
             
             // 日付ナビゲーション、ムード、感謝日記を並列実行
             const dateMatch = page.title.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+            const progressDashboard = document.getElementById('progress-dashboard');
             if (dateMatch) {
                 window.currentDiaryPageId = id;
                 const moodTracker = document.getElementById('mood-tracker');
                 const gratitudeJournal = document.getElementById('gratitude-journal');
                 moodTracker.classList.remove('hidden');
                 gratitudeJournal.classList.remove('hidden');
+                progressDashboard.classList.remove('hidden');
 
                 promises.push(loadWeightData(id, page.title));
+                promises.push(loadProgressDashboard(progressPeriod));
                 promises.push(
                     Promise.resolve().then(() => {
                         checkAndShowDateNavigation(page.title);
@@ -2095,6 +2762,7 @@
                 const gratitudeJournal = document.getElementById('gratitude-journal');
                 moodTracker.classList.add('hidden');
                 gratitudeJournal.classList.add('hidden');
+                progressDashboard.classList.add('hidden');
             }
             
             updateHealthplanetDataDisplay(page.blocks || [], Boolean(dateMatch));
