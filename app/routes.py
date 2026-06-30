@@ -30,6 +30,7 @@ from .utils import (
     backup_database_to_json, get_or_create_date_page,
     cleanup_accumulated_running_records
 )
+from .progress import build_progress_summary
 
 # パス設定
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -821,6 +822,23 @@ def register_routes(app):
         page['blocks'] = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return jsonify(page)
+
+    @app.route('/api/progress-summary', methods=['GET'])
+    def progress_summary():
+        """トップページの体重・ランニング成長ダッシュボード。"""
+        try:
+            period_days = int(request.args.get('days', 30))
+        except (TypeError, ValueError):
+            period_days = 30
+        if period_days not in (30, 90, 365):
+            period_days = 30
+
+        conn = get_db()
+        try:
+            summary = build_progress_summary(conn, period_days=period_days)
+        finally:
+            conn.close()
+        return jsonify(summary)
 
     @app.route('/api/pages/<int:page_id>', methods=['PUT'])
     def update_page(page_id):
