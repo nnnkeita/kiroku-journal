@@ -846,7 +846,10 @@
                 <a href="/tokusho" class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100">特商法</a>
                 <a href="/logout" class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100">ログアウト</a>
             </div>
-            <span id="save-status" class="text-xs text-gray-400">保存済み</span>
+            <button id="save-button" type="button" onclick="saveNow()" class="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold shadow-sm transition disabled:opacity-60 disabled:cursor-wait">
+                💾 保存
+            </button>
+            <span id="save-status" class="text-xs text-gray-500 min-w-16 text-right" role="status" aria-live="polite">保存済み</span>
         </div>
 
         <div class="flex-1 overflow-y-auto bg-green-50" id="editor-container">
@@ -1261,6 +1264,8 @@
         // 保存リクエストのキュー管理（パフォーマンス改善）
         let saveQueue = new Map(); // key -> { timeoutId, saveFn }
         const DEBOUNCE_TIME = 150; // デバウンス時間（ms）
+        const DRAFT_STORAGE_PREFIX = 'kiroku-local-draft-v1-';
+        let pagesFetchPromise = null;
 
 
         function toggleSidebar() {
@@ -1453,8 +1458,8 @@
                 body: JSON.stringify({ date: dateStr })
             });
             const page = await res.json();
-            await fetchPages();
-            loadPage(page.id);
+            await loadPage(page.id);
+            fetchPages();
         }
 
         // --- 日付ページナビゲーション機能 ---
@@ -1835,14 +1840,13 @@
         }
 
         async function loadWeatherForSidebarPages() {
-            // サイドバーの日付ページの気分と天気情報を取得して表示（並列化）
-            const weatherElements = document.querySelectorAll('.weather-info');
-            console.log(`Found ${weatherElements.length} weather elements`);
+            // 直近の日付だけ天気を補完する。気分・体重は /api/pages の値を使い、
+            // 日付ページごとの再取得を避けて初期表示を軽くする。
+            const weatherElements = Array.from(document.querySelectorAll('.weather-info')).slice(0, 14);
             const weatherPromises = [];
             
             for (const element of weatherElements) {
                 const pageTitle = element.dataset.pageTitle;
-                const pageId = element.dataset.pageId;
                 
                 // タイトルが「YYYY年M月D日」形式かチェック
                 const dateMatch = pageTitle.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
@@ -1852,25 +1856,15 @@
                     const month = parseInt(dateMatch[2]);
                     const day = parseInt(dateMatch[3]);
                     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    console.log(`Processing date page: ${pageTitle}, pageId: ${pageId}`);
                     
-                    // 気分と天気を両方取得して表示
+                    // 天気だけ取得。気分と体重は既に要素へ描画済み。
                     weatherPromises.push(
-                        Promise.all([
-                            fetch(`/api/pages/${pageId}`).then(r => r.ok ? r.json() : null).catch(() => null),
-                            fetch(`/api/weather?date=${dateStr}`).then(r => r.ok ? r.json() : null).catch(() => null)
-                        ]).then(([page, weather]) => {
-                            console.log(`Data for ${pageTitle}:`, { mood: page?.mood, weather: weather });
-                            let html = '';
-                            let title = '';
-                            
-                            // 気分の数字
-                            const fallbackMood = parseInt(element.dataset.mood || '0');
-                            const moodValue = page?.mood || fallbackMood;
-                            if (moodValue) {
-                                html += String(moodValue);
-                                title += `気分: ${moodValue}`;
-                            }
+                        fetch(`/api/weather?date=${dateStr}`)
+                            .then(r => r.ok ? r.json() : null)
+                            .catch(() => null)
+                            .then((weather) => {
+                            let html = element.dataset.summary || '';
+                            let title = element.dataset.summaryTitle || '';
                             
                             // 天気情報
                             if (weather && weather.temp_max !== null && weather.temp_min !== null) {
@@ -1880,18 +1874,9 @@
                                 title += `${Math.round(weather.temp_max)}°C / ${Math.round(weather.temp_min)}°C`;
                             }
 
-                            // 体重
-                            if (page?.weight) {
-                                if (html) html += ' ';
-                                html += `${page.weight}kg`;
-                                if (title) title += ' / ';
-                                title += `体重: ${page.weight}kg`;
-                            }
-                            
                             if (html) {
                                 element.innerHTML = html;
                                 element.title = title;
-                                console.log(`Updated ${pageTitle} with: ${html}`);
                             }
                         })
                     );
@@ -1912,10 +1897,15 @@
             const month = today.getMonth() + 1;
             const day = today.getDate();
             
-            // 少し遅延させてページ読み込み完了を待つ
-            setTimeout(async () => {
-                await createPageFromDate(year, month, day);
-            }, 100);
+            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const response = await fetch('/api/pages/from-date', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ date: dateStr })
+            });
+            if (!response.ok) throw new Error('今日のページを開けませんでした');
+            const page = await response.json();
+            await loadPage(page.id);
         }
 
         // --- 以下、既存の機能 ---
@@ -2165,6 +2155,16 @@
         }
 
         async function fetchPages() {
+            if (pagesFetchPromise) return pagesFetchPromise;
+            pagesFetchPromise = fetchPagesInternal();
+            try {
+                return await pagesFetchPromise;
+            } finally {
+                pagesFetchPromise = null;
+            }
+        }
+
+        async function fetchPagesInternal() {
             const container = document.getElementById('page-list');
             const hasPages = container.children.length > 0;
             
@@ -2317,15 +2317,25 @@
 
                 const isDatePage = (page.title || '').match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
                 const moodValue = isDatePage && page.mood ? page.mood : 0;
-                const moodNum = moodValue ? String(moodValue) : '';
-                const moodTitle = moodValue ? `気分: ${moodValue}` : '';
+                const summaryParts = [];
+                const summaryTitleParts = [];
+                if (moodValue) {
+                    summaryParts.push(String(moodValue));
+                    summaryTitleParts.push(`気分: ${moodValue}`);
+                }
+                if (isDatePage && page.weight) {
+                    summaryParts.push(`${page.weight}kg`);
+                    summaryTitleParts.push(`体重: ${page.weight}kg`);
+                }
+                const summaryText = summaryParts.join(' ');
+                const summaryTitle = summaryTitleParts.join(' / ');
 
                 const displayTitle = (page.title || '無題').replace(/^\d{4}年/, '');
                 row.innerHTML = `
                     ${toggleBtn}
                     <span class="mr-2 opacity-70">${page.icon}</span>
                     <span class="truncate flex-1">${displayTitle}</span>
-                    <span class="weather-info text-xs text-gray-400 pl-2 shrink-0 w-24 text-right overflow-hidden" data-page-id="${page.id}" data-page-title="${page.title || ''}" data-mood="${moodValue}" title="${moodTitle}">${moodNum}</span>
+                    <span class="weather-info text-xs text-gray-400 pl-2 shrink-0 w-24 text-right overflow-hidden" data-page-id="${page.id}" data-page-title="${page.title || ''}" data-summary="${summaryText}" data-summary-title="${summaryTitle}" title="${summaryTitle}">${summaryText}</span>
                 `;
                 wrapper.appendChild(row);
 
@@ -2641,9 +2651,6 @@
             const blocksContainer = document.getElementById('blocks');
             blocksContainer.innerHTML = '<div class="p-8 text-center text-gray-400"><div class="loader inline-block"></div></div>';
             
-            // サイドバー更新を非同期で実行（ブロッキングしない）
-            fetchPages();
-            
             // キャッシュから取得を試みる
             let page = pageCache[id];
             
@@ -2660,6 +2667,11 @@
                     delete pageCache[cacheKeys[0]];
                 }
             }
+            page = {
+                ...page,
+                blocks: (page.blocks || []).map(block => ({ ...block }))
+            };
+            const restoredDraft = applyLocalDraft(page);
             
             // === 高速描画開始（スケルトン画面） ===
             const coverDiv = document.getElementById('cover-image');
@@ -2741,7 +2753,8 @@
                 progressDashboard.classList.remove('hidden');
 
                 promises.push(loadWeightData(id, page.title));
-                promises.push(loadProgressDashboard(progressPeriod));
+                // グラフは本文の操作開始を待たせず、独立して読み込む。
+                loadProgressDashboard(progressPeriod);
                 promises.push(
                     Promise.resolve().then(() => {
                         checkAndShowDateNavigation(page.title);
@@ -2789,12 +2802,17 @@
             // ===すぐにブロック描画開始（UI応答性向上） ===
             currentBlocks = (page.blocks || []).slice().sort((a, b) => a.position - b.position);
             renderBlocks(currentBlocks);
+            if (restoredDraft) {
+                queueRecoveredDraft(id, restoredDraft);
+            }
             
             // 残りの非同期処理を完了待ち（ブロック描画後）
             await Promise.all(promises);
             if (loadToken !== pageLoadToken) return;
             
-            document.getElementById('save-status').innerText = '保存済み';
+            if (![...saveQueue.values()].some(entry => entry.pageId === id)) {
+                setSaveState('保存済み');
+            }
         }
 
         function escapeHtml(text) {
@@ -3328,12 +3346,14 @@
             loadPage(folder.id);
         }
         function saveTitle() {
+            rememberTitleDraft(document.getElementById('page-title').value);
             debouncedSave(`page-${currentPageId}-title`, async () => {
-                await fetch(`/api/pages/${currentPageId}`, { 
+                const response = await fetch(`/api/pages/${currentPageId}`, {
                     method: 'PUT', 
                     headers: {'Content-Type': 'application/json'}, 
                     body: JSON.stringify({ title: document.getElementById('page-title').value }) 
                 });
+                if (!response.ok) throw new Error('タイトルの保存に失敗しました');
                 fetchPages();
             });
         }
@@ -3412,28 +3432,135 @@
             addBlockAfter(blockId, 'calorie');
         }
         
-        // 効率的な保存処理（キュー管理）
-        function debouncedSave(key, saveFunction, delay = DEBOUNCE_TIME) {
-            if (saveQueue.has(key)) {
-                clearTimeout(saveQueue.get(key).timeoutId);
+        function draftStorageKey(pageId) {
+            return `${DRAFT_STORAGE_PREFIX}${pageId}`;
+        }
+
+        function readLocalDraft(pageId) {
+            if (!pageId) return null;
+            try {
+                return JSON.parse(localStorage.getItem(draftStorageKey(pageId)) || 'null');
+            } catch (error) {
+                return null;
             }
+        }
 
-            document.getElementById('save-status').innerText = '保存中...';
+        function writeLocalDraft(pageId, updater) {
+            if (!pageId) return;
+            const draft = readLocalDraft(pageId) || { blocks: {} };
+            draft.blocks = draft.blocks || {};
+            updater(draft);
+            draft.updatedAt = new Date().toISOString();
+            localStorage.setItem(draftStorageKey(pageId), JSON.stringify(draft));
+        }
 
-            const timeoutId = setTimeout(async () => {
+        function rememberTitleDraft(value) {
+            writeLocalDraft(currentPageId, draft => {
+                draft.title = value;
+            });
+        }
+
+        function rememberBlockDraft(blockId, key, value) {
+            writeLocalDraft(currentPageId, draft => {
+                draft.blocks[String(blockId)] = draft.blocks[String(blockId)] || {};
+                draft.blocks[String(blockId)][key] = value;
+            });
+        }
+
+        function clearLocalDraft(pageId) {
+            if (pageId) localStorage.removeItem(draftStorageKey(pageId));
+        }
+
+        function applyLocalDraft(page) {
+            const draft = readLocalDraft(page.id);
+            if (!draft) return null;
+            if (Object.prototype.hasOwnProperty.call(draft, 'title')) {
+                page.title = draft.title;
+            }
+            const changes = draft.blocks || {};
+            (page.blocks || []).forEach(block => {
+                const blockChanges = changes[String(block.id)];
+                if (blockChanges) Object.assign(block, blockChanges);
+            });
+            setSaveState('未保存の内容を復元', 'dirty');
+            return draft;
+        }
+
+        function queueRecoveredDraft(pageId, draft) {
+            if (Object.prototype.hasOwnProperty.call(draft, 'title')) {
+                debouncedSave(`page-${pageId}-title`, async () => {
+                    const response = await fetch(`/api/pages/${pageId}`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ title: draft.title })
+                    });
+                    if (!response.ok) throw new Error('復元タイトルの保存に失敗しました');
+                }, 800, pageId);
+            }
+            Object.entries(draft.blocks || {}).forEach(([blockId, changes]) => {
+                Object.entries(changes).forEach(([key, value]) => {
+                    debouncedSave(`block-${blockId}-${key}`, async () => {
+                        const response = await fetch(`/api/blocks/${blockId}`, {
+                            method: 'PUT',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ [key]: value })
+                        });
+                        if (!response.ok) throw new Error('復元内容の保存に失敗しました');
+                    }, 800, pageId);
+                });
+            });
+        }
+
+        function setSaveState(text, state = 'saved') {
+            const status = document.getElementById('save-status');
+            const button = document.getElementById('save-button');
+            status.innerText = text;
+            status.className = `text-xs min-w-16 text-right ${
+                state === 'error' ? 'text-red-600' :
+                state === 'dirty' ? 'text-amber-600' :
+                state === 'saving' ? 'text-blue-600' : 'text-green-700'
+            }`;
+            button.disabled = state === 'saving';
+        }
+
+        async function runQueuedSave(key, entry) {
+            if (entry.inFlight) return entry.inFlight;
+            entry.inFlight = (async () => {
                 try {
-                    await saveFunction();
-                    document.getElementById('save-status').innerText = '保存済み';
+                    await entry.saveFn();
+                    if (saveQueue.get(key) === entry) {
+                        saveQueue.delete(key);
+                    }
+                    const pageHasPending = [...saveQueue.values()].some(item => item.pageId === entry.pageId);
+                    if (!pageHasPending) {
+                        clearLocalDraft(entry.pageId);
+                        if (entry.pageId === currentPageId) setSaveState('保存済み');
+                    }
                     if (currentPageId && pageCache[currentPageId]) delete pageCache[currentPageId];
+                    return true;
                 } catch (error) {
                     console.error('Save error:', error);
-                    document.getElementById('save-status').innerText = '保存失敗';
+                    entry.timeoutId = null;
+                    if (entry.pageId === currentPageId) setSaveState('保存失敗・再試行できます', 'error');
+                    return false;
                 } finally {
-                    saveQueue.delete(key);
+                    entry.inFlight = null;
                 }
-            }, delay);
+            })();
+            return entry.inFlight;
+        }
 
-            saveQueue.set(key, { timeoutId, saveFn: saveFunction });
+        // 効率的な保存処理（キュー管理）
+        function debouncedSave(key, saveFunction, delay = DEBOUNCE_TIME, pageId = currentPageId) {
+            if (saveQueue.has(key)) {
+                const pendingTimer = saveQueue.get(key).timeoutId;
+                if (pendingTimer) clearTimeout(pendingTimer);
+            }
+
+            setSaveState('未保存', 'dirty');
+            const entry = { timeoutId: null, saveFn: saveFunction, pageId, inFlight: null };
+            entry.timeoutId = setTimeout(() => runQueuedSave(key, entry), delay);
+            saveQueue.set(key, entry);
         }
 
         function captureActiveEditorValue() {
@@ -3466,13 +3593,19 @@
         // ページ切り替え前に未保存の変更を即時フラッシュ
         async function flushAllPendingSaves() {
             captureActiveEditorValue();
-            if (saveQueue.size === 0) return;
-            document.getElementById('save-status').innerText = '保存中...';
+            if (saveQueue.size === 0) return true;
+            setSaveState('保存中...', 'saving');
             const entries = Array.from(saveQueue.entries());
-            saveQueue.clear();
             entries.forEach(([, { timeoutId }]) => clearTimeout(timeoutId));
-            await Promise.all(entries.map(([, { saveFn }]) => saveFn().catch(e => console.error('flush save error:', e))));
-            document.getElementById('save-status').innerText = '保存済み';
+            const results = await Promise.all(entries.map(([key, entry]) => runQueuedSave(key, entry)));
+            return results.every(Boolean);
+        }
+
+        async function saveNow() {
+            const saved = await flushAllPendingSaves();
+            if (saved) {
+                setSaveState(`保存しました ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`);
+            }
         }
         
         function updateBlock(id, key, value) {
@@ -3483,14 +3616,16 @@
             if (currentPageId && pageCache[currentPageId]) {
                 delete pageCache[currentPageId];
             }
+            rememberBlockDraft(id, key, value);
             debouncedSave(`block-${id}-${key}`, async () => {
                 const body = {};
                 body[key] = value;
-                await fetch(`/api/blocks/${id}`, { 
+                const response = await fetch(`/api/blocks/${id}`, {
                     method: 'PUT', 
                     headers: {'Content-Type': 'application/json'}, 
                     body: JSON.stringify(body) 
                 });
+                if (!response.ok) throw new Error('本文の保存に失敗しました');
             });
         }
 

@@ -16,6 +16,7 @@ import subprocess
 import urllib.request
 import urllib.error
 import urllib.parse
+import time
 from werkzeug.utils import secure_filename
 
 from .database import (
@@ -42,6 +43,7 @@ BACKUP_FOLDER = os.path.join(PROJECT_ROOT, 'backups')
 
 def register_routes(app):
     """全APIルートをアプリに登録"""
+    progress_cache = {}
 
     def _get_healthplanet_config():
         client_id = os.getenv('HEALTHPLANET_CLIENT_ID', '')
@@ -833,11 +835,19 @@ def register_routes(app):
         if period_days not in (30, 90, 365):
             period_days = 30
 
+        cached = progress_cache.get(period_days)
+        if cached and time.monotonic() - cached['created_at'] < 60:
+            return jsonify(cached['summary'])
+
         conn = get_db()
         try:
             summary = build_progress_summary(conn, period_days=period_days)
         finally:
             conn.close()
+        progress_cache[period_days] = {
+            'created_at': time.monotonic(),
+            'summary': summary,
+        }
         return jsonify(summary)
 
     @app.route('/api/pages/<int:page_id>', methods=['PUT'])
