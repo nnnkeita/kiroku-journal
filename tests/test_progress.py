@@ -66,6 +66,31 @@ class ProgressSummaryTest(unittest.TestCase):
         self.assertEqual(result['running']['total_distance'], 7.0)
         self.assertEqual(result['running']['run_count'], 1)
 
+    def test_ignores_lap_markers_in_runtrack_post(self):
+        self.conn.executemany(
+            'INSERT INTO pages (id, title, parent_id, weight) VALUES (?, ?, ?, ?)',
+            [
+                (1, '2026年6月29日', None, None),
+                (2, '日記', 1, None),
+            ],
+        )
+        self.conn.execute(
+            'INSERT INTO blocks (id, page_id, content) VALUES (?, ?, ?)',
+            (
+                1,
+                2,
+                """🏃 ランニング記録
+                📏 距離 : 5.51 km
+                🏃 平均ペース: 6'10"/km
+                📍 ラップ 1km: 6'13"/km 2km: 6'26"/km""",
+            ),
+        )
+
+        result = build_progress_summary(self.conn, 30, today=date(2026, 6, 30))
+
+        self.assertEqual(result['running']['total_distance'], 5.5)
+        self.assertEqual(result['running']['average_distance'], 5.5)
+
     def test_compares_with_previous_period(self):
         self.conn.executemany(
             'INSERT INTO pages (id, title, parent_id, weight) VALUES (?, ?, ?, ?)',

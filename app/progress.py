@@ -9,6 +9,10 @@ from datetime import date, datetime, timedelta, timezone
 DATE_TITLE_RE = re.compile(r'^(\d{4})年(\d{1,2})月(\d{1,2})日$')
 RUNNING_RE = re.compile(r'(?:朝|夜)?ラン(?:ニング)?|running?', re.IGNORECASE)
 DISTANCE_RE = re.compile(r'(?<![\d.])(\d+(?:\.\d+)?)\s*(?:km|キロ(?:メートル)?)', re.IGNORECASE)
+LABELED_DISTANCE_RE = re.compile(
+    r'(?:距離|distance)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:km|キロ(?:メートル)?)',
+    re.IGNORECASE,
+)
 
 
 def _normalize_text(value):
@@ -29,7 +33,13 @@ def _running_distances(value):
     text = _normalize_text(value)
     if not RUNNING_RE.search(text):
         return []
-    return [float(match.group(1)) for match in DISTANCE_RE.finditer(text)]
+    # RunTrack の投稿には「距離: 5.5km」の後にラップの
+    # 「1km / 2km ...」が並ぶため、それらを走行距離として加算しない。
+    labeled = LABELED_DISTANCE_RE.search(text)
+    if labeled:
+        return [float(labeled.group(1))]
+    fallback = DISTANCE_RE.search(text)
+    return [float(fallback.group(1))] if fallback else []
 
 
 def _round(value, digits=1):
