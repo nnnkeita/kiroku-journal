@@ -1084,6 +1084,12 @@
         </div>
     </div>
 
+    <button id="floating-save-button" type="button" onclick="saveNow()" aria-label="日記を保存"
+            class="fixed right-5 bottom-5 z-40 flex items-center gap-2 px-5 py-3 rounded-full bg-green-600 hover:bg-green-700 active:scale-95 text-white text-base font-bold shadow-xl transition disabled:opacity-60 disabled:cursor-wait">
+        <span aria-hidden="true">💾</span>
+        <span id="floating-save-label">保存する</span>
+    </button>
+
     <div id="context-menu">
         <div class="menu-item" onclick="contextAction('copy')">📋 コピー</div>
         <div class="menu-item" onclick="contextAction('paste')" id="paste-menu-item">📄 貼り付け</div>
@@ -3513,14 +3519,23 @@
 
         function setSaveState(text, state = 'saved') {
             const status = document.getElementById('save-status');
-            const button = document.getElementById('save-button');
+            const buttons = [
+                document.getElementById('save-button'),
+                document.getElementById('floating-save-button')
+            ].filter(Boolean);
+            const floatingLabel = document.getElementById('floating-save-label');
             status.innerText = text;
             status.className = `text-xs min-w-16 text-right ${
                 state === 'error' ? 'text-red-600' :
                 state === 'dirty' ? 'text-amber-600' :
                 state === 'saving' ? 'text-blue-600' : 'text-green-700'
             }`;
-            button.disabled = state === 'saving';
+            buttons.forEach(button => {
+                button.disabled = state === 'saving';
+            });
+            if (floatingLabel) {
+                floatingLabel.innerText = state === 'saving' ? '保存中...' : '保存する';
+            }
         }
 
         async function runQueuedSave(key, entry) {
