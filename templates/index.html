@@ -987,16 +987,17 @@
                 </div>
                 
                 <!-- 感謝日記 -->
-                <div id="gratitude-journal" class="hidden mb-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg border border-amber-100">
+                <div id="gratitude-journal" class="hidden mb-6 p-5 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg border border-amber-100 shadow-sm">
                     <div class="flex items-center gap-2 mb-3">
                         <span class="text-lg">🙏</span>
                         <span class="text-sm font-semibold text-gray-700">今日の感謝日記</span>
                     </div>
                     <textarea id="gratitude-text" 
-                              placeholder="今日感謝したことを書きましょう..."
-                              class="w-full p-3 bg-white/60 border border-amber-200 rounded-md text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-transparent resize-none"
-                              rows="3"
-                              style="min-height: 80px;"></textarea>
+                              placeholder="今日感謝したこと、出来事、気づきをゆっくり書きましょう..."
+                              class="w-full p-4 bg-white/70 border border-amber-200 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-transparent resize-none block-textarea journal-textarea"
+                              rows="8"
+                              data-min-height="220"
+                              style="min-height: 220px;"></textarea>
                 </div>
 
                 <section id="progress-dashboard" class="progress-dashboard hidden" aria-labelledby="progress-dashboard-title">
@@ -1801,6 +1802,7 @@
             const gratitudeTextarea = document.getElementById('gratitude-text');
             if (gratitudeTextarea) {
                 gratitudeTextarea.value = gratitudeText;
+                autoResizeTextarea(gratitudeTextarea);
             }
         }
 
@@ -1812,16 +1814,20 @@
             const gratitudeText = gratitudeTextarea.value;
             
             try {
+                setSaveState('保存中...', 'saving');
                 const response = await fetch(`/api/pages/${currentPageId}/gratitude`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ gratitude_text: gratitudeText })
                 });
                 if (response.ok) {
-                    // 保存成功
+                    setSaveState('保存済み');
                     console.log('Gratitude saved successfully');
+                } else {
+                    setSaveState('保存失敗・再試行できます', 'error');
                 }
             } catch (error) {
+                setSaveState('保存失敗・再試行できます', 'error');
                 console.error('Failed to save gratitude:', error);
             }
         }
@@ -1835,6 +1841,8 @@
                 // デバウンスして保存
                 let saveTimeout;
                 gratitudeTextarea.addEventListener('input', () => {
+                    autoResizeTextarea(gratitudeTextarea);
+                    setSaveState('未保存', 'dirty');
                     clearTimeout(saveTimeout);
                     saveTimeout = setTimeout(() => {
                         saveGratitudeData();
