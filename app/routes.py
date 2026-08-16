@@ -852,9 +852,13 @@ def register_routes(app):
 
     @app.route('/api/pages/<int:page_id>', methods=['PUT'])
     def update_page(page_id):
-        data = request.json
+        data = request.get_json(silent=True) or {}
         conn = get_db()
         cursor = conn.cursor()
+        cursor.execute('SELECT id FROM pages WHERE id = ?', (page_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'error': 'Page not found'}), 404
         updates = []
         values = []
         fields = ['title', 'icon', 'parent_id', 'cover_image', 'is_pinned', 'is_deleted', 'position']
@@ -869,6 +873,8 @@ def register_routes(app):
             conn.commit()
         cursor.execute('SELECT * FROM pages WHERE id = ?', (page_id,))
         page = dict(cursor.fetchone())
+        if 'client_revision' in data:
+            page['client_revision'] = data.get('client_revision')
         conn.close()
         return jsonify(page)
 
@@ -1967,9 +1973,13 @@ def register_routes(app):
 
     @app.route('/api/blocks/<int:block_id>', methods=['PUT'])
     def update_block(block_id):
-        data = request.json
+        data = request.get_json(silent=True) or {}
         conn = get_db()
         cursor = conn.cursor()
+        cursor.execute('SELECT id FROM blocks WHERE id = ?', (block_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'error': 'Block not found'}), 404
         updates = []
         values = []
         fields = ['type', 'content', 'checked', 'position', 'collapsed', 'details', 'props']
@@ -1988,6 +1998,8 @@ def register_routes(app):
             conn.close()
             return jsonify({'error': 'Block not found'}), 404
         block = dict(row)
+        if 'client_revision' in data:
+            block['client_revision'] = data.get('client_revision')
         conn.close()
         
         import time

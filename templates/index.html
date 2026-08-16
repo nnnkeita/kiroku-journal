@@ -105,7 +105,23 @@
             resize: none;
             overflow: hidden;
             min-height: 1.5em;
+            line-height: 1.65;
             cursor: text;
+        }
+
+        .journal-textarea {
+            min-height: 9rem;
+            padding: 0.75rem 0.85rem;
+            border-radius: 0.5rem;
+            background-color: rgba(255, 255, 255, 0.55);
+        }
+
+        .note-textarea {
+            min-height: 7rem;
+        }
+
+        .todo-textarea {
+            min-height: 2.4em;
         }
         
         .block-textarea:focus, input:focus {
@@ -1267,8 +1283,9 @@
         let pageLoadToken = 0; // 古いページ読み込み結果の反映を防ぐ
         const MAX_UNDO = 50; // 最大履歴数
         
-        // 保存リクエストのキュー管理（パフォーマンス改善）
-        let saveQueue = new Map(); // key -> { timeoutId, saveFn }
+        // 保存リクエストのキュー管理（最新入力だけを確実に同期）
+        let saveQueue = new Map(); // key -> { timeoutId, saveFn, pageId, revision, ... }
+        let saveRevision = 0;
         const DEBOUNCE_TIME = 150; // デバウンス時間（ms）
         const DRAFT_STORAGE_PREFIX = 'kiroku-local-draft-v1-';
         let pagesFetchPromise = null;
@@ -1379,12 +1396,12 @@
 
         window.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') {
-                flushAllPendingSaves();
+                flushAllPendingSaves({ keepalive: true });
             }
         });
 
         window.addEventListener('pagehide', () => {
-            flushAllPendingSaves();
+            flushAllPendingSaves({ keepalive: true });
         });
 
         function setFocusedBlock(id) {
@@ -2084,7 +2101,8 @@
         // Textarea自動リサイズ
         function autoResizeTextarea(textarea) {
             textarea.style.height = 'auto';
-            textarea.style.height = Math.max(textarea.scrollHeight, 24) + 'px';
+            const minHeight = parseInt(textarea.dataset.minHeight || '24', 10);
+            textarea.style.height = Math.max(textarea.scrollHeight, minHeight) + 'px';
         }
 
         function computeInsertPosition() {
@@ -3108,7 +3126,7 @@
                     const escapedTodo = (block.content || '').replace(/"/g, '&quot;');
                     contentHtml = `
                         <input type="checkbox" ${block.checked ? 'checked' : ''} onchange="handleTodoToggle(${block.id}, this.checked)" class="mt-1.5 rounded text-blue-500 focus:ring-0 cursor-pointer">
-                        <textarea class="flex-1 ${block.checked ? 'line-through text-gray-400' : ''} border-none focus:ring-0 bg-transparent cursor-text block-textarea" placeholder="やったことを入力..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'content', this.value); autoResizeTextarea(this)" onkeydown="handleTodoKeydown(event, ${block.id})">${escapedTodo}</textarea>
+                        <textarea rows="1" data-min-height="38" class="flex-1 ${block.checked ? 'line-through text-gray-400' : ''} border-none focus:ring-0 bg-transparent cursor-text block-textarea todo-textarea" placeholder="やったことを入力..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'content', this.value); autoResizeTextarea(this)" onkeydown="handleTodoKeydown(event, ${block.id})">${escapedTodo}</textarea>
                     `;
                 } else if (block.type === 'exercise') {
                     const exData = parseBlockProps(block.props) || { name: '', weight: 0, sets: 3, reps: 5 };
@@ -3188,7 +3206,7 @@
                                 </div>
                             </div>
                             <div class="mt-3">
-                                <textarea class="w-full border border-blue-100 focus:ring-0 bg-transparent block-textarea rounded p-2" placeholder="今日の感想を書く..." onfocus="setFocusedBlock(${block.id})" oninput="updateBookData(${block.id}, 'note', this.value); autoResizeTextarea(this)">${escapedNote}</textarea>
+                                <textarea rows="5" data-min-height="112" class="w-full border border-blue-100 focus:ring-0 bg-transparent block-textarea note-textarea rounded p-2" placeholder="今日の感想を書く..." onfocus="setFocusedBlock(${block.id})" oninput="updateBookData(${block.id}, 'note', this.value); autoResizeTextarea(this)">${escapedNote}</textarea>
                             </div>
                         </div>
                     `;
@@ -3202,7 +3220,7 @@
                                 <input type="text" class="flex-1 border-none focus:ring-0 bg-transparent cursor-text" value="${escapedTitle}" placeholder="トグルタイトル..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'content', this.value)" onclick="event.stopPropagation()" />
                             </summary>
                             <div class="ml-6 mt-2 pl-2 border-l-2 border-gray-200">
-                                <textarea class="w-full border-none focus:ring-0 bg-transparent block-textarea cursor-text" placeholder="内容..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'details', this.value); autoResizeTextarea(this)">${escapedDetails}</textarea>
+                                <textarea rows="5" data-min-height="112" class="w-full border-none focus:ring-0 bg-transparent block-textarea note-textarea cursor-text" placeholder="内容..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'details', this.value); autoResizeTextarea(this)">${escapedDetails}</textarea>
                             </div>
                         </details>
                     `;
@@ -3230,7 +3248,7 @@
                                     <span class="text-sm text-gray-600 w-8" id="speak-rate-display-${block.id}">${rate}x</span>
                                 </div>
                             </div>
-                            <textarea class="w-full border border-purple-100 focus:ring-0 bg-transparent block-textarea rounded p-2" placeholder="読み上げたいテキストを入力..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'content', this.value); autoResizeTextarea(this)">${escapedContent}</textarea>
+                            <textarea rows="6" data-min-height="144" class="w-full border border-purple-100 focus:ring-0 bg-transparent block-textarea journal-textarea rounded p-2" placeholder="読み上げたいテキストを入力..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'content', this.value); autoResizeTextarea(this)">${escapedContent}</textarea>
                         </div>
                     `;
                 } else if (block.type === 'text') {
@@ -3262,11 +3280,11 @@
                             </div>
                         `;
                     } else {
-                        contentHtml = `<textarea class="w-full border-none focus:ring-0 bg-transparent block-textarea cursor-text" placeholder="テキストを入力..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'content', this.value); autoResizeTextarea(this)">${escapedContent}</textarea>`;
+                        contentHtml = `<textarea rows="6" data-min-height="144" class="w-full border-none focus:ring-0 bg-transparent block-textarea journal-textarea cursor-text" placeholder="テキストを入力..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'content', this.value); autoResizeTextarea(this)">${escapedContent}</textarea>`;
                     }
                 } else {
                     const escapedContent = (block.content || '').replace(/"/g, '&quot;');
-                    contentHtml = `<textarea class="w-full border-none focus:ring-0 bg-transparent block-textarea cursor-text" placeholder="テキストを入力..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'content', this.value); autoResizeTextarea(this)">${escapedContent}</textarea>`;
+                    contentHtml = `<textarea rows="6" data-min-height="144" class="w-full border-none focus:ring-0 bg-transparent block-textarea journal-textarea cursor-text" placeholder="テキストを入力..." onfocus="setFocusedBlock(${block.id})" oninput="updateBlock(${block.id}, 'content', this.value); autoResizeTextarea(this)">${escapedContent}</textarea>`;
                 }
                 const deleteBtn = `<button onclick="deleteBlock(${block.id})" class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded p-1 transition" title="削除">×</button>`;
                 div.innerHTML = handle + contentHtml + deleteBtn;
@@ -3352,16 +3370,18 @@
             loadPage(folder.id);
         }
         function saveTitle() {
-            rememberTitleDraft(document.getElementById('page-title').value);
-            debouncedSave(`page-${currentPageId}-title`, async () => {
-                const response = await fetch(`/api/pages/${currentPageId}`, {
-                    method: 'PUT', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ title: document.getElementById('page-title').value }) 
-                });
+            const pageId = currentPageId;
+            const title = document.getElementById('page-title').value;
+            rememberTitleDraft(title);
+            debouncedSave(`page-${pageId}-title`, async (options = {}) => {
+                const response = await saveJson(
+                    `/api/pages/${pageId}`,
+                    { title },
+                    options
+                );
                 if (!response.ok) throw new Error('タイトルの保存に失敗しました');
                 fetchPages();
-            });
+            }, DEBOUNCE_TIME, pageId);
         }
         async function updateIcon() {
             const newIcon = prompt('アイコンを入力:', document.getElementById('page-icon').innerText);
@@ -3494,27 +3514,34 @@
 
         function queueRecoveredDraft(pageId, draft) {
             if (Object.prototype.hasOwnProperty.call(draft, 'title')) {
-                debouncedSave(`page-${pageId}-title`, async () => {
-                    const response = await fetch(`/api/pages/${pageId}`, {
-                        method: 'PUT',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ title: draft.title })
-                    });
+                debouncedSave(`page-${pageId}-title`, async (options = {}) => {
+                    const response = await saveJson(`/api/pages/${pageId}`, { title: draft.title }, options);
                     if (!response.ok) throw new Error('復元タイトルの保存に失敗しました');
                 }, 800, pageId);
             }
             Object.entries(draft.blocks || {}).forEach(([blockId, changes]) => {
                 Object.entries(changes).forEach(([key, value]) => {
-                    debouncedSave(`block-${blockId}-${key}`, async () => {
-                        const response = await fetch(`/api/blocks/${blockId}`, {
-                            method: 'PUT',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ [key]: value })
-                        });
+                    debouncedSave(`block-${blockId}-${key}`, async (options = {}) => {
+                        const response = await saveJson(`/api/blocks/${blockId}`, { [key]: value }, options);
                         if (!response.ok) throw new Error('復元内容の保存に失敗しました');
                     }, 800, pageId);
                 });
             });
+        }
+
+        function saveJson(url, payload, options = {}) {
+            const body = { ...payload };
+            if (options.clientRevision) body.client_revision = options.clientRevision;
+            return fetch(url, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body),
+                keepalive: Boolean(options.keepalive)
+            });
+        }
+
+        function formatSaveTime() {
+            return new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
         }
 
         function setSaveState(text, state = 'saved') {
@@ -3524,7 +3551,7 @@
                 document.getElementById('floating-save-button')
             ].filter(Boolean);
             const floatingLabel = document.getElementById('floating-save-label');
-            status.innerText = text;
+            status.innerText = state === 'saved' && text === '保存済み' ? `保存済み ${formatSaveTime()}` : text;
             status.className = `text-xs min-w-16 text-right ${
                 state === 'error' ? 'text-red-600' :
                 state === 'dirty' ? 'text-amber-600' :
@@ -3538,12 +3565,14 @@
             }
         }
 
-        async function runQueuedSave(key, entry) {
+        async function runQueuedSave(key, entry, options = {}) {
             if (entry.inFlight) return entry.inFlight;
             entry.inFlight = (async () => {
                 try {
-                    await entry.saveFn();
-                    if (saveQueue.get(key) === entry) {
+                    if (entry.waitFor && !options.keepalive) await entry.waitFor.catch(() => {});
+                    await entry.saveFn({ ...options, clientRevision: entry.revision });
+                    const latestEntry = saveQueue.get(key);
+                    if (latestEntry === entry) {
                         saveQueue.delete(key);
                     }
                     const pageHasPending = [...saveQueue.values()].some(item => item.pageId === entry.pageId);
@@ -3560,6 +3589,9 @@
                     return false;
                 } finally {
                     entry.inFlight = null;
+                    if (saveQueue.get(key) && saveQueue.get(key) !== entry) {
+                        runQueuedSave(key, saveQueue.get(key));
+                    }
                 }
             })();
             return entry.inFlight;
@@ -3567,14 +3599,25 @@
 
         // 効率的な保存処理（キュー管理）
         function debouncedSave(key, saveFunction, delay = DEBOUNCE_TIME, pageId = currentPageId) {
-            if (saveQueue.has(key)) {
-                const pendingTimer = saveQueue.get(key).timeoutId;
+            const previousEntry = saveQueue.get(key);
+            if (previousEntry) {
+                const pendingTimer = previousEntry.timeoutId;
                 if (pendingTimer) clearTimeout(pendingTimer);
             }
 
             setSaveState('未保存', 'dirty');
-            const entry = { timeoutId: null, saveFn: saveFunction, pageId, inFlight: null };
-            entry.timeoutId = setTimeout(() => runQueuedSave(key, entry), delay);
+            const entry = {
+                timeoutId: null,
+                saveFn: saveFunction,
+                pageId,
+                revision: ++saveRevision,
+                inFlight: null,
+                waitFor: previousEntry?.inFlight || null
+            };
+            entry.timeoutId = setTimeout(() => {
+                const latestEntry = saveQueue.get(key);
+                if (latestEntry === entry) runQueuedSave(key, entry);
+            }, delay);
             saveQueue.set(key, entry);
         }
 
@@ -3606,20 +3649,20 @@
         }
 
         // ページ切り替え前に未保存の変更を即時フラッシュ
-        async function flushAllPendingSaves() {
+        async function flushAllPendingSaves(options = {}) {
             captureActiveEditorValue();
             if (saveQueue.size === 0) return true;
             setSaveState('保存中...', 'saving');
             const entries = Array.from(saveQueue.entries());
             entries.forEach(([, { timeoutId }]) => clearTimeout(timeoutId));
-            const results = await Promise.all(entries.map(([key, entry]) => runQueuedSave(key, entry)));
+            const results = await Promise.all(entries.map(([key, entry]) => runQueuedSave(key, entry, options)));
             return results.every(Boolean);
         }
 
         async function saveNow() {
             const saved = await flushAllPendingSaves();
             if (saved) {
-                setSaveState(`保存しました ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`);
+                setSaveState(`保存しました ${formatSaveTime()}`);
             }
         }
         
@@ -3632,14 +3675,10 @@
                 delete pageCache[currentPageId];
             }
             rememberBlockDraft(id, key, value);
-            debouncedSave(`block-${id}-${key}`, async () => {
+            debouncedSave(`block-${id}-${key}`, async (options = {}) => {
                 const body = {};
                 body[key] = value;
-                const response = await fetch(`/api/blocks/${id}`, {
-                    method: 'PUT', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify(body) 
-                });
+                const response = await saveJson(`/api/blocks/${id}`, body, options);
                 if (!response.ok) throw new Error('本文の保存に失敗しました');
             });
         }
@@ -3760,12 +3799,9 @@
                 updateBookDelta(blockId, props);
             }
             
-            debouncedSave(`book-${blockId}`, async () => {
-                await fetch(`/api/blocks/${blockId}`, {
-                    method: 'PUT',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ props: JSON.stringify(props) })
-                });
+            debouncedSave(`book-${blockId}`, async (options = {}) => {
+                const response = await saveJson(`/api/blocks/${blockId}`, { props: JSON.stringify(props) }, options);
+                if (!response.ok) throw new Error('読書データの保存に失敗しました');
             });
         }
 
@@ -3782,12 +3818,9 @@
             if (weightEl) weightEl.textContent = `${props.weight}kg`;
             const summaryEl = document.querySelector(`[data-id="${blockId}"] .exercise-summary`);
             if (summaryEl) summaryEl.textContent = `${props.weight}kg × ${props.reps ?? 0}回 × ${props.sets ?? 0}セット`;
-            debouncedSave(`exercise-${blockId}`, async () => {
-                await fetch(`/api/blocks/${blockId}`, {
-                    method: 'PUT',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ props: JSON.stringify(props) })
-                });
+            debouncedSave(`exercise-${blockId}`, async (options = {}) => {
+                const response = await saveJson(`/api/blocks/${blockId}`, { props: JSON.stringify(props) }, options);
+                if (!response.ok) throw new Error('筋トレデータの保存に失敗しました');
             });
         }
 
@@ -3799,12 +3832,9 @@
             block.props = JSON.stringify(props);
             const summaryEl = document.querySelector(`[data-id="${blockId}"] .exercise-summary`);
             if (summaryEl) summaryEl.textContent = `${props.weight ?? 0}kg × ${props.reps ?? 0}回 × ${props.sets ?? 0}セット`;
-            debouncedSave(`exercise-${blockId}-${field}`, async () => {
-                await fetch(`/api/blocks/${blockId}`, {
-                    method: 'PUT',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ props: JSON.stringify(props) })
-                });
+            debouncedSave(`exercise-${blockId}-${field}`, async (options = {}) => {
+                const response = await saveJson(`/api/blocks/${blockId}`, { props: JSON.stringify(props) }, options);
+                if (!response.ok) throw new Error('筋トレデータの保存に失敗しました');
             });
         }
 
