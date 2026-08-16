@@ -2041,16 +2041,22 @@ def register_routes(app):
     def update_page_gratitude(page_id):
         """ページの感謝日記を更新"""
         try:
-            data = request.json
+            data = request.get_json(silent=True) or {}
             gratitude_text = data.get('gratitude_text', '')
             
             conn = get_db()
             cursor = conn.cursor()
+            cursor.execute('SELECT id FROM pages WHERE id = ?', (page_id,))
+            if not cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Page not found'}), 404
+
             cursor.execute('UPDATE pages SET gratitude_text = ? WHERE id = ?', (gratitude_text, page_id))
             conn.commit()
             
             cursor.execute('SELECT * FROM pages WHERE id = ?', (page_id,))
-            page = dict(cursor.fetchone()) if cursor.fetchone() else None
+            row = cursor.fetchone()
+            page = dict(row) if row else None
             conn.close()
             
             if page:

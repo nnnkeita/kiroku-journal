@@ -1806,30 +1806,22 @@
             }
         }
 
-        async function saveGratitudeData() {
-            if (!currentPageId) return;
+        function saveGratitudeData(delay = DEBOUNCE_TIME) {
+            const pageId = currentPageId;
+            if (!pageId) return;
             const gratitudeTextarea = document.getElementById('gratitude-text');
             if (!gratitudeTextarea) return;
             
             const gratitudeText = gratitudeTextarea.value;
-            
-            try {
-                setSaveState('保存中...', 'saving');
-                const response = await fetch(`/api/pages/${currentPageId}/gratitude`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ gratitude_text: gratitudeText })
-                });
-                if (response.ok) {
-                    setSaveState('保存済み');
-                    console.log('Gratitude saved successfully');
-                } else {
-                    setSaveState('保存失敗・再試行できます', 'error');
-                }
-            } catch (error) {
-                setSaveState('保存失敗・再試行できます', 'error');
-                console.error('Failed to save gratitude:', error);
-            }
+            rememberGratitudeDraft(pageId, gratitudeText);
+            debouncedSave(`page-${pageId}-gratitude`, async (options = {}) => {
+                const response = await saveJson(
+                    `/api/pages/${pageId}/gratitude`,
+                    { gratitude_text: gratitudeText },
+                    options
+                );
+                if (!response.ok) throw new Error('感謝日記の保存に失敗しました');
+            }, delay, pageId);
         }
 
         // 感謝日記のテキストエリアにイベントリスナーを設定（一度だけ）
@@ -1838,15 +1830,9 @@
             if (gratitudeJournalSetup) return;
             const gratitudeTextarea = document.getElementById('gratitude-text');
             if (gratitudeTextarea) {
-                // デバウンスして保存
-                let saveTimeout;
                 gratitudeTextarea.addEventListener('input', () => {
                     autoResizeTextarea(gratitudeTextarea);
-                    setSaveState('未保存', 'dirty');
-                    clearTimeout(saveTimeout);
-                    saveTimeout = setTimeout(() => {
-                        saveGratitudeData();
-                    }, 500); // 500ms後に自動保存
+                    saveGratitudeData(300);
                 });
                 gratitudeJournalSetup = true;
             }
@@ -3501,6 +3487,12 @@
             });
         }
 
+        function rememberGratitudeDraft(pageId, value) {
+            writeLocalDraft(pageId, draft => {
+                draft.gratitude_text = value;
+            });
+        }
+
         function clearLocalDraft(pageId) {
             if (pageId) localStorage.removeItem(draftStorageKey(pageId));
         }
@@ -3510,6 +3502,9 @@
             if (!draft) return null;
             if (Object.prototype.hasOwnProperty.call(draft, 'title')) {
                 page.title = draft.title;
+            }
+            if (Object.prototype.hasOwnProperty.call(draft, 'gratitude_text')) {
+                page.gratitude_text = draft.gratitude_text;
             }
             const changes = draft.blocks || {};
             (page.blocks || []).forEach(block => {
@@ -3525,6 +3520,16 @@
                 debouncedSave(`page-${pageId}-title`, async (options = {}) => {
                     const response = await saveJson(`/api/pages/${pageId}`, { title: draft.title }, options);
                     if (!response.ok) throw new Error('復元タイトルの保存に失敗しました');
+                }, 800, pageId);
+            }
+            if (Object.prototype.hasOwnProperty.call(draft, 'gratitude_text')) {
+                debouncedSave(`page-${pageId}-gratitude`, async (options = {}) => {
+                    const response = await saveJson(
+                        `/api/pages/${pageId}/gratitude`,
+                        { gratitude_text: draft.gratitude_text },
+                        options
+                    );
+                    if (!response.ok) throw new Error('復元した感謝日記の保存に失敗しました');
                 }, 800, pageId);
             }
             Object.entries(draft.blocks || {}).forEach(([blockId, changes]) => {
@@ -3635,6 +3640,11 @@
 
             if (active.id === 'page-title') {
                 saveTitle();
+                return;
+            }
+
+            if (active.id === 'gratitude-text') {
+                saveGratitudeData(0);
                 return;
             }
 
