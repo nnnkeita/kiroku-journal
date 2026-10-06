@@ -1248,9 +1248,10 @@
     <script>
         // Service Worker登録（PWA対応）
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/static/sw.js')
+            navigator.serviceWorker.register('/static/sw.js?v=4')
                 .then((registration) => {
                     console.log('Service Worker registered:', registration);
+                    registration.update().catch(() => {});
                 })
                 .catch((error) => {
                     console.log('Service Worker registration failed:', error);
@@ -2674,7 +2675,7 @@
             
             // キャッシュがなければフェッチ
             if (!page) {
-                const res = await fetch(`/api/pages/${id}`);
+                const res = await fetch(`/api/pages/${id}`, { cache: 'no-store' });
                 page = await res.json();
                 if (loadToken !== pageLoadToken) return;
                 
@@ -2732,7 +2733,7 @@
                     parentPage = pageCache[page.parent_id];
                     if (!parentPage) {
                         promises.push(
-                            fetch(`/api/pages/${page.parent_id}`).then(r => r.json()).then(p => {
+                            fetch(`/api/pages/${page.parent_id}`, { cache: 'no-store' }).then(r => r.json()).then(p => {
                                 pageCache[page.parent_id] = p;
                                 parentPage = p;
                             })
@@ -4695,7 +4696,7 @@
                         
                         // ページを再読み込みして、同期されたデータを表示
                         console.log(`[HealthPlanet] Reloading page data...`);
-                        const res2 = await fetch(`/api/pages/${currentPageId}`);
+                        const res2 = await fetch(`/api/pages/${currentPageId}`, { cache: 'no-store' });
                         const page = await res2.json();
                         
                         console.log(`[HealthPlanet] Fetched page with ${page.blocks?.length || 0} blocks`);

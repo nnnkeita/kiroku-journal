@@ -123,19 +123,35 @@ def cache_api_response(timeout_seconds=60):
 @app.after_request
 def set_cache_headers(response):
     """キャッシュコントロールヘッダーを設定"""
-    if request.path.startswith('/static/'):
-        # 静的ファイル: 1年キャッシュ
-        response.cache_control.max_age = 31536000
-        response.cache_control.public = True
-    elif request.path.endswith('.html') or request.path == '/':
-        # HTMLファイル: キャッシュなし（常に最新を取得）
+    if request.path == '/static/sw.js':
+        # Service Worker 自体を長期キャッシュすると、修正版の配信が遅れる。
         response.cache_control.max_age = 0
         response.cache_control.no_cache = True
         response.cache_control.no_store = True
-    else:
-        # APIエンドポイント: 短期キャッシュ（5分）
-        response.cache_control.max_age = 300
+        response.cache_control.public = False
+        response.cache_control.private = True
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    elif request.path.startswith('/static/'):
+        # 静的ファイル: 1年キャッシュ
+        response.cache_control.max_age = 31536000
         response.cache_control.public = True
+    elif request.path.startswith('/api/') or request.path.endswith('.html') or request.path == '/':
+        # API と HTML は常に最新を取得する。
+        # 特に編集 API の GET 応答をキャッシュすると、保存成功後の再読込で
+        # 保存前の本文が表示され、自動保存が失敗したように見えてしまう。
+        response.cache_control.max_age = 0
+        response.cache_control.no_cache = True
+        response.cache_control.no_store = True
+        response.cache_control.public = False
+        response.cache_control.private = True
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    else:
+        # その他の動的レスポンスも共有キャッシュには保存しない。
+        response.cache_control.max_age = 0
+        response.cache_control.no_cache = True
+        response.cache_control.private = True
     
     # gzip 圧縮の有効化確認
     if 'gzip' not in response.headers.get('Content-Encoding', ''):

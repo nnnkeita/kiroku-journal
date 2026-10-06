@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'kiroku-journal-v3';
+const CACHE_NAME = 'kiroku-journal-v4';
 const urlsToCache = [
   '/static/manifest.json'
 ];
@@ -17,17 +17,28 @@ self.addEventListener('install', (event) => {
 
 // ページ本体は更新を即反映するためネットワーク優先にする
 self.addEventListener('fetch', (event) => {
-  if (event.request.mode === 'navigate') {
+  const request = event.request;
+  const url = new URL(request.url);
+
+  // 更新系リクエストと API は絶対に Cache Storage から返さない。
+  // 日記保存後に古い /api/pages/... が表示されるのを防ぐ。
+  if (request.method !== 'GET' ||
+      (url.origin === self.location.origin && url.pathname.startsWith('/api/'))) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
+      fetch(request).catch(() => caches.match(request))
     );
     return;
   }
 
   event.respondWith(
-    caches.match(event.request)
+    caches.match(request)
       .then((response) => {
-        return response || fetch(event.request);
+        return response || fetch(request);
       })
   );
 });
