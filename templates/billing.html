@@ -24,12 +24,16 @@
         <div class="mb-4 text-sm text-gray-600 bg-gray-50 border border-gray-100 rounded px-3 py-2">決済がキャンセルされました。</div>
         {% endif %}
         <div class="space-y-2">
+            {% if sales_available %}
             <form method="post" action="{{ url_for('billing_checkout') }}">
                 <input type="hidden" name="token" value="{{ token }}">
                 <button class="block w-full bg-green-600 text-white py-2 rounded" name="plan" value="monthly">月額480円（税込）で申し込む</button>
-                {% if annual %}<button class="block w-full mt-2 bg-green-600 text-white py-2 rounded" name="plan" value="annual">年額4,800円（税込）で申し込む</button>{% endif %}
+                <button class="block w-full mt-2 bg-green-600 text-white py-2 rounded" name="plan" value="annual">年額4,800円（税込）で申し込む</button>
             </form>
             <p class="text-sm">契約は自動更新されます。契約管理から次回更新を停止できます。</p>
+            {% else %}
+            <p>有料プランの新規受付は準備中です。</p>
+            {% endif %}
             <a href="/billing/portal" class="block w-full text-center bg-gray-100 text-gray-700 py-2 rounded hover:bg-gray-200">契約管理（解約/支払い）</a>
             <a href="/logout" class="block w-full text-center text-gray-500 py-2 rounded hover:bg-gray-50">ログアウト</a>
         </div>

@@ -60,6 +60,7 @@ TTS_ENABLED = os.getenv('TTS_ENABLED', '1') == '1'
 CALORIE_ENABLED = os.getenv('CALORIE_ENABLED', '1') == '1'
 OWNER_USERNAME = os.getenv('JOURNAL_OWNER_USERNAME', '').strip()
 AUTH_ENABLED = bool(OWNER_USERNAME) or os.getenv('AUTH_ENABLED', '0') == '1'
+BILLING_LAUNCH_ENABLED = os.getenv('BILLING_LAUNCH_ENABLED', '0') == '1'
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
 STRIPE_PRICE_ID = os.getenv('STRIPE_PRICE_ID', '')
@@ -478,7 +479,7 @@ def privacy():
 
 @app.route('/tokusho')
 def tokusho():
-    return render_template('tokusho.html')
+    return render_template('tokusho.html', sales_available=billing_sales_available())
 
 @app.route('/tokutei.html')
 def tokutei_html():
@@ -490,9 +491,17 @@ def tokutei():
     """特定商取引法ページ"""
     return redirect(url_for('tokusho'))
 
+def billing_sales_available():
+    return bool(
+        BILLING_LAUNCH_ENABLED and AUTH_ENABLED and OWNER_USERNAME
+        and STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET
+        and STRIPE_PRICE_ID and STRIPE_ANNUAL_PRICE_ID
+    )
+
+
 @app.route('/pricing')
 def pricing():
-    return render_template('pricing.html')
+    return render_template('pricing.html', sales_available=billing_sales_available())
 
 @app.route('/billing')
 def billing():
@@ -500,7 +509,7 @@ def billing():
     user = dict(user) if user else None
     status = user['subscription_status'] if user else 'inactive'
     token = session.setdefault('billing_token', secrets.token_urlsafe(32))
-    return render_template('billing.html', status=status, token=token, annual=bool(STRIPE_ANNUAL_PRICE_ID))
+    return render_template('billing.html', status=status, token=token, sales_available=billing_sales_available())
 
 @app.route('/billing/checkout', methods=['POST'])
 def billing_checkout():
@@ -508,7 +517,7 @@ def billing_checkout():
     if not token or token != request.form.get('token'):
         return 'Invalid form token', 403
     price = {'monthly': STRIPE_PRICE_ID, 'annual': STRIPE_ANNUAL_PRICE_ID}.get(request.form.get('plan'))
-    if not AUTH_ENABLED or not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET or not price:
+    if not billing_sales_available() or not price:
         return '決済は現在利用できません。', 503
     user = get_user_by_id(session.get('user_id'))
     user = dict(user) if user else None
