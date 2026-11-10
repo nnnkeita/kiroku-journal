@@ -236,7 +236,7 @@ OWNER_ENDPOINTS = {
 }
 PUBLIC_ENDPOINTS = {
     'static', 'login', 'pricing', 'setup', 'webhook_deploy', 'stripe_webhook',
-    'reset_password', 'forgot_password', 'terms', 'privacy', 'tokusho', 'tokutei',
+    'reset_password', 'forgot_password', 'terms', 'privacy', 'tokusho', 'tokutei', 'tokutei_html',
 }
 
 
@@ -483,12 +483,12 @@ def tokusho():
 @app.route('/tokutei.html')
 def tokutei_html():
     """Stripe 審査対応: 特定商取引法ページ（.html形式）"""
-    return send_from_directory(STATIC_FOLDER, 'tokutei.html')
+    return redirect(url_for('tokusho'))
 
 @app.route('/tokutei')
 def tokutei():
     """特定商取引法ページ"""
-    return send_from_directory(STATIC_FOLDER, 'tokutei.html')
+    return redirect(url_for('tokusho'))
 
 @app.route('/pricing')
 def pricing():
