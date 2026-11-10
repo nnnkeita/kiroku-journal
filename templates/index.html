@@ -853,6 +853,7 @@
             </div>
             <button id="theme-toggle" onclick="toggleTheme()" class="text-gray-600 text-sm px-2 py-1 rounded hover:bg-gray-100">🌙</button>
             <div class="flex items-center gap-2">
+                {% if g.journal_owner %}<a href="{{ url_for('admin_journals') }}">管理者画面</a>{% endif %}
                 {% if current_user %}
                 <span class="text-xs text-gray-500">👤 {{ current_user }}</span>
                 {% endif %}
@@ -1289,7 +1290,7 @@
         let saveQueue = new Map(); // key -> { timeoutId, saveFn, pageId, revision, ... }
         let saveRevision = 0;
         const DEBOUNCE_TIME = 150; // デバウンス時間（ms）
-        const DRAFT_STORAGE_PREFIX = 'kiroku-local-draft-v1-';
+        const DRAFT_STORAGE_PREFIX = 'kiroku-local-draft-v2-' + {{ session.get('user_id', 'local') | tojson }} + '-';
         let pagesFetchPromise = null;
 
 
@@ -4042,12 +4043,12 @@
                 if (item.breadcrumb && item.breadcrumb.length > 0) {
                     breadcrumbHtml = '<div class="text-xs text-gray-400 mb-1">';
                     item.breadcrumb.forEach(ancestor => {
-                        breadcrumbHtml += `${ancestor.icon} ${ancestor.title} / `;
+                        breadcrumbHtml += `${escapeHtml(ancestor.icon || "")} ${escapeHtml(ancestor.title || "")} / `;
                     });
                     breadcrumbHtml = breadcrumbHtml.slice(0, -3) + '</div>';
                 }
                 
-                div.innerHTML = `${breadcrumbHtml}<div class="text-sm font-bold text-gray-700">${item.icon} ${item.page_title || '無題'}</div><div class="text-xs text-gray-500 truncate">${item.snippet}</div>`;
+                div.innerHTML = `${breadcrumbHtml}<div class="text-sm font-bold text-gray-700">${escapeHtml(item.icon || '')} ${escapeHtml(item.page_title || '無題')}</div><div class="text-xs text-gray-500 truncate">${escapeHtml(item.snippet || '')}</div>`;
                 container.appendChild(div);
             });
         }

@@ -19,6 +19,7 @@
 
                 <h2 class="text-base font-semibold text-gray-800">2. 利用目的</h2>
                 <p>本サービスの提供、本人確認、料金請求、サポート対応、サービス改善のために利用します。</p>
+                {% if config.JOURNAL_OWNER_CONFIGURED %}<p>運営管理者は、運用やサポートに必要な場合に日記の本文や添付ファイルを閲覧できます。</p>{% endif %}
 
                 <h2 class="text-base font-semibold text-gray-800">3. 第三者提供</h2>
                 <p>決済処理のためStripeに情報を提供します。法令に基づく場合を除き、第三者に提供しません。</p>

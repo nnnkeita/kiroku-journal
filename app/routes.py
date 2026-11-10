@@ -19,6 +19,7 @@ import urllib.parse
 import time
 from werkzeug.utils import secure_filename
 
+from .workspaces import uploads_folder, workspace_path
 from .database import (
     get_db, get_next_position, get_block_next_position,
     mark_tree_deleted, hard_delete_tree,
@@ -835,7 +836,8 @@ def register_routes(app):
         if period_days not in (30, 90, 365):
             period_days = 30
 
-        cached = progress_cache.get(period_days)
+        cache_key = (workspace_path(), period_days)
+        cached = progress_cache.get(cache_key)
         if cached and time.monotonic() - cached['created_at'] < 60:
             return jsonify(cached['summary'])
 
@@ -844,7 +846,7 @@ def register_routes(app):
             summary = build_progress_summary(conn, period_days=period_days)
         finally:
             conn.close()
-        progress_cache[period_days] = {
+        progress_cache[cache_key] = {
             'created_at': time.monotonic(),
             'summary': summary,
         }
@@ -950,7 +952,7 @@ def register_routes(app):
         try:
             sql = '''
                 SELECT blocks.id as block_id, blocks.page_id, pages.title as page_title, pages.icon, blocks.content, 
-                       snippet(blocks_fts, 0, '<b>', '</b>', '...', 10) as snippet,
+                       substr(blocks.content, 1, 180) AS snippet,
                        pages.parent_id
                 FROM blocks_fts
                 JOIN blocks ON blocks_fts.rowid = blocks.id
@@ -1095,7 +1097,7 @@ def register_routes(app):
             search_query = f"{query}*"
             sql = '''
                 SELECT blocks.id as block_id, blocks.page_id, pages.title as page_title, pages.icon, blocks.content,
-                       snippet(blocks_fts, 0, '<b>', '</b>', '...', 10) as snippet,
+                       substr(blocks.content, 1, 180) AS snippet,
                        pages.parent_id
                 FROM blocks_fts
                 JOIN blocks ON blocks_fts.rowid = blocks.id
@@ -1334,7 +1336,7 @@ def register_routes(app):
                 search_query = f"{last_user}*"
                 sql = '''
                     SELECT blocks.id as block_id, blocks.page_id, pages.title as page_title, pages.icon, blocks.content,
-                           snippet(blocks_fts, 0, '<b>', '</b>', '...', 10) as snippet,
+                           substr(blocks.content, 1, 180) AS snippet,
                            pages.parent_id
                     FROM blocks_fts
                     JOIN blocks ON blocks_fts.rowid = blocks.id
@@ -2005,7 +2007,7 @@ def register_routes(app):
         import time
         current_time = time.time()
         last_backup_time = getattr(update_block, '_last_backup', 0)
-        if current_time - last_backup_time > 300:
+        if not workspace_path() and current_time - last_backup_time > 300:
             backup_database_to_json()
             update_block._last_backup = current_time
         
@@ -2187,7 +2189,7 @@ def register_routes(app):
         filename = secure_filename(file.filename)
         import uuid
         unique_filename = f"{uuid.uuid4()}_{filename}"
-        file.save(os.path.join(UPLOAD_FOLDER, unique_filename))
+        file.save(os.path.join(uploads_folder(UPLOAD_FOLDER), unique_filename))
         file_url = f'/uploads/{unique_filename}'
         conn = get_db()
         cursor = conn.cursor()
@@ -2310,8 +2312,8 @@ def register_routes(app):
                     file_path = block.get('content', '')
                     if file_path and file_path.startswith('/uploads/'):
                         filename = file_path.split('/')[-1]
-                        full_path = os.path.join(UPLOAD_FOLDER, filename)
-                        if os.path.exists(full_path):
+                        full_path = os.path.join(uploads_folder(UPLOAD_FOLDER), os.path.basename(filename))
+                        if os.path.isfile(full_path):
                             z.write(full_path, f"{page_dir}/files/{filename}")
             
             for child in pg.get('children', []):

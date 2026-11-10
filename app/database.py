@@ -15,9 +15,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)  # kiroku-journal フォルダ
 DATABASE = os.path.join(PROJECT_ROOT, 'notion.db')
 
-def get_db():
+def get_db(*, accounts=False):
     """データベース接続を取得"""
-    conn = sqlite3.connect(DATABASE)
+    from .workspaces import workspace_path
+
+    workspace = None if accounts else workspace_path()
+    path = os.path.join(workspace, "journal.sqlite3") if workspace else DATABASE
+    conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -307,7 +311,7 @@ def clear_healthplanet_token() -> None:
 
 def get_user_count() -> int:
     """登録ユーザー数を取得"""
-    conn = get_db()
+    conn = get_db(accounts=True)
     cursor = conn.cursor()
     cursor.execute('SELECT COUNT(*) FROM users')
     count = cursor.fetchone()[0]
@@ -316,7 +320,7 @@ def get_user_count() -> int:
 
 def get_user_by_username(username: str) -> Optional[sqlite3.Row]:
     """ユーザー名でユーザー取得"""
-    conn = get_db()
+    conn = get_db(accounts=True)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
     row = cursor.fetchone()
@@ -325,29 +329,29 @@ def get_user_by_username(username: str) -> Optional[sqlite3.Row]:
 
 def get_user_by_id(user_id: int) -> Optional[sqlite3.Row]:
     """ユーザーIDでユーザー取得"""
-    conn = get_db()
+    conn = get_db(accounts=True)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
     row = cursor.fetchone()
     conn.close()
     return row
 
-def create_user(username: str, password_hash: str) -> int:
+def create_user(username: str, password_hash: str, *, trial_ends_at: Optional[str] = None) -> int:
     """ユーザー作成"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute(
-        'INSERT INTO users (username, password_hash) VALUES (?, ?)',
-        (username, password_hash)
-    )
-    user_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return int(user_id)
+    conn = get_db(accounts=True)
+    try:
+        with conn:
+            cursor = conn.execute(
+                'INSERT INTO users (username, password_hash, subscription_status, subscription_ends_at) VALUES (?, ?, ?, ?)',
+                (username, password_hash, 'trialing' if trial_ends_at else 'inactive', trial_ends_at),
+            )
+            return int(cursor.lastrowid)
+    finally:
+        conn.close()
 
 def update_user_password(user_id: int, password_hash: str) -> None:
     """パスワード更新"""
-    conn = get_db()
+    conn = get_db(accounts=True)
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?', (password_hash, user_id))
     conn.commit()
@@ -355,7 +359,7 @@ def update_user_password(user_id: int, password_hash: str) -> None:
 
 def set_password_reset_token(user_id: int, token: str, expires_at: str) -> None:
     """パスワード再設定トークン登録"""
-    conn = get_db()
+    conn = get_db(accounts=True)
     cursor = conn.cursor()
     cursor.execute(
         'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
@@ -366,7 +370,7 @@ def set_password_reset_token(user_id: int, token: str, expires_at: str) -> None:
 
 def get_password_reset_token(token: str) -> Optional[sqlite3.Row]:
     """トークン取得"""
-    conn = get_db()
+    conn = get_db(accounts=True)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM password_reset_tokens WHERE token = ?', (token,))
     row = cursor.fetchone()
@@ -375,7 +379,7 @@ def get_password_reset_token(token: str) -> Optional[sqlite3.Row]:
 
 def mark_password_reset_token_used(token: str) -> None:
     """トークン使用済み"""
-    conn = get_db()
+    conn = get_db(accounts=True)
     cursor = conn.cursor()
     cursor.execute('UPDATE password_reset_tokens SET used = 1 WHERE token = ?', (token,))
     conn.commit()
@@ -383,7 +387,7 @@ def mark_password_reset_token_used(token: str) -> None:
 
 def update_user_stripe_customer(user_id: int, customer_id: str) -> None:
     """Stripe顧客ID更新"""
-    conn = get_db()
+    conn = get_db(accounts=True)
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET stripe_customer_id = ? WHERE id = ?', (customer_id, user_id))
     conn.commit()
@@ -391,7 +395,7 @@ def update_user_stripe_customer(user_id: int, customer_id: str) -> None:
 
 def get_user_by_stripe_customer(customer_id: str) -> Optional[sqlite3.Row]:
     """Stripe顧客IDでユーザー取得"""
-    conn = get_db()
+    conn = get_db(accounts=True)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE stripe_customer_id = ?', (customer_id,))
     row = cursor.fetchone()
@@ -400,7 +404,7 @@ def get_user_by_stripe_customer(customer_id: str) -> Optional[sqlite3.Row]:
 
 def update_user_subscription(user_id: int, status: str, ends_at: Optional[str] = None) -> None:
     """サブスク状態更新"""
-    conn = get_db()
+    conn = get_db(accounts=True)
     cursor = conn.cursor()
     cursor.execute(
         'UPDATE users SET subscription_status = ?, subscription_ends_at = ? WHERE id = ?',

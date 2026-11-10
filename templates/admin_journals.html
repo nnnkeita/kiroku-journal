@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日記の管理 | kioku journal</title>
+<style>
+body { font: 1rem/1.6 system-ui, sans-serif; max-width: 54rem; margin: auto; padding: 1rem; color: #19362d; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+a { color: #17624b; }
+</style>
+</head>
+<body>
+<p><a href="{{ url_for('index') }}">自分の日記へ</a></p>
+<h1>日記の管理</h1>
+<form method="get" action="{{ url_for('admin_journals') }}">
+    <label for="user">アカウント</label>
+    <select id="user" name="user" required>
+        <option value="">選択してください</option>
+        {% for user in users %}
+        <option value="{{ user.id }}"{% if target and target.id == user.id %} selected{% endif %}>{{ user.username }}</option>
+        {% endfor %}
+    </select>
+    <button>表示</button>
+</form>
+{% if target %}
+<h2>{{ target.username }} のページ</h2>
+{% if page %}
+<p><a href="{{ url_for('admin_journals', user=target.id) }}">ページ一覧へ</a></p>
+<h3>{{ page.title or '無題' }}</h3>
+{% if page.cover_image and page.cover_image.startswith('/uploads/') %}
+<p><a href="{{ url_for('admin_attachment', user_id=target.id, filename=page.cover_image[9:]) }}">カバー画像をダウンロード</a></p>
+{% endif %}
+{% if page.gratitude_text %}<p>感謝日記</p><pre>{{ page.gratitude_text }}</pre>{% endif %}
+{% if page.mood %}<p>気分 {{ page.mood }}</p>{% endif %}
+{% if page.weight is not none %}<p>体重 {{ page.weight }} kg</p>{% endif %}
+{% if page.body_fat is not none %}<p>体脂肪率 {{ page.body_fat }}%</p>{% endif %}
+{% for block in blocks %}
+{% if block.content and block.content.startswith('/uploads/') and block.type in ('image', 'file') %}
+<p><a href="{{ url_for('admin_attachment', user_id=target.id, filename=block.content[9:]) }}">添付をダウンロード</a></p>
+{% else %}
+<pre>{{ block.content or '' }}</pre>
+{% endif %}
+{% endfor %}
+{% else %}
+<ul>
+{% for item in pages %}
+<li><a href="{{ url_for('admin_journals', user=target.id, page=item.id) }}">{{ item.title or '無題' }}</a>{% if item.is_deleted %}（ゴミ箱）{% endif %}</li>
+{% else %}
+<li>ページはまだありません。</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% endif %}
+</body>
+</html>

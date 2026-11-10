@@ -17,3 +17,5 @@ __pycache__/
 
 # macOS
 .DS_Store
+# Private per-account journals and attachments
+/journal_workspaces/

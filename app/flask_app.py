@@ -9,14 +9,17 @@
 
 このファイルは Flask アプリケーションの初期化とベースルートのみを管理します。
 """
-from flask import Flask, render_template, send_from_directory, request, redirect, session, url_for, jsonify, make_response
+from flask import Flask, render_template, send_from_directory, request, redirect, session, url_for, jsonify, make_response, g, abort
 import os
 import sys
 import secrets
 import smtplib
 from email.message import EmailMessage
 from datetime import datetime, timedelta
+import click
 import stripe
+from contextlib import closing, nullcontext
+from sqlite3 import IntegrityError
 import subprocess
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
@@ -30,13 +33,14 @@ from functools import wraps, lru_cache
 from datetime import datetime, timedelta
 
 from .database import (
-    init_db, get_or_create_inbox, get_or_create_finished, get_user_count, get_user_by_username, create_user,
+    get_db, init_db, get_or_create_inbox, get_or_create_finished, get_user_count, get_user_by_username, create_user,
     get_user_by_id, update_user_password, set_password_reset_token, get_password_reset_token,
     mark_password_reset_token_used, update_user_stripe_customer, update_user_subscription,
     get_user_by_stripe_customer
 )
 
 from .routes import register_routes
+from .workspaces import use_workspace, uploads_folder
 from .backup_scheduler import init_backup_scheduler
 
 # === パス設定 ===
@@ -54,10 +58,12 @@ load_dotenv(env_path)
 # === 設定値の定義 ===
 TTS_ENABLED = os.getenv('TTS_ENABLED', '1') == '1'
 CALORIE_ENABLED = os.getenv('CALORIE_ENABLED', '1') == '1'
-AUTH_ENABLED = os.getenv('AUTH_ENABLED', '0') == '1'  # デフォルトで認証はオフ
+OWNER_USERNAME = os.getenv('JOURNAL_OWNER_USERNAME', '').strip()
+AUTH_ENABLED = bool(OWNER_USERNAME) or os.getenv('AUTH_ENABLED', '0') == '1'
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
 STRIPE_PRICE_ID = os.getenv('STRIPE_PRICE_ID', '')
+STRIPE_ANNUAL_PRICE_ID = os.getenv('STRIPE_ANNUAL_PRICE_ID', '')
 APP_BASE_URL = os.getenv('APP_BASE_URL', 'http://127.0.0.1:5000')
 STRIPE_SUCCESS_URL = os.getenv('STRIPE_SUCCESS_URL', f'{APP_BASE_URL}/billing?success=1')
 STRIPE_CANCEL_URL = os.getenv('STRIPE_CANCEL_URL', f'{APP_BASE_URL}/billing?canceled=1')
@@ -76,6 +82,7 @@ app = Flask(__name__, template_folder=TEMPLATE_FOLDER, static_folder=STATIC_FOLD
 if COMPRESS_AVAILABLE:
     Compress(app)
 
+app.config['JOURNAL_OWNER_CONFIGURED'] = bool(OWNER_USERNAME)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 secret = os.getenv('APP_SECRET')
@@ -136,7 +143,7 @@ def set_cache_headers(response):
         # 静的ファイル: 1年キャッシュ
         response.cache_control.max_age = 31536000
         response.cache_control.public = True
-    elif request.path.startswith('/api/') or request.path.endswith('.html') or request.path == '/':
+    elif AUTH_ENABLED or request.path.startswith('/api/') or request.path.endswith('.html') or request.path == '/':
         # API と HTML は常に最新を取得する。
         # 特に編集 API の GET 応答をキャッシュすると、保存成功後の再読込で
         # 保存前の本文が表示され、自動保存が失敗したように見えてしまう。
@@ -221,44 +228,124 @@ def _is_subscription_active(user):
         return False
     return False
 
-# === 認証ガード ===
+# These routes operate on the installation, not on the selected journal.
+OWNER_ENDPOINTS = {
+    'download_db', 'list_backups', 'restore_backup', 'upload_db',
+    'reload_app', 'get_system_status', 'health_check', 'admin_cleanup_running_records',
+    'admin_journals', 'admin_attachment',
+}
+PUBLIC_ENDPOINTS = {
+    'static', 'login', 'pricing', 'setup', 'webhook_deploy', 'stripe_webhook',
+    'reset_password', 'forgot_password', 'terms', 'privacy', 'tokusho', 'tokutei',
+}
+
+
+def is_journal_owner(user):
+    return bool(OWNER_USERNAME and user and user['username'] == OWNER_USERNAME)
+
+
 @app.before_request
 def require_login():
+    if request.endpoint is None or request.endpoint in PUBLIC_ENDPOINTS:
+        return
     if not AUTH_ENABLED:
+        if request.endpoint in OWNER_ENDPOINTS:
+            abort(403)
         return
-    if request.path.startswith('/static/'):
-        return
-    if request.endpoint is None:
-        return
-    public_endpoints = {
-        'login',
-        'setup',
-        'webhook_deploy',
-        'stripe_webhook',
-        'reset_password',
-        'forgot_password',
-        'terms',
-        'privacy',
-        'tokusho',
-        'healthplanet_auth',
-        'healthplanet_callback'
-    }
-    if request.endpoint in public_endpoints:
-        return
-    if not session.get('user_id'):
+
+    user = get_user_by_id(session.get('user_id')) if session.get('user_id') else None
+    if not user:
+        session.clear()
         return redirect(url_for('login'))
-    subscription_exempt = public_endpoints | {
-        'billing',
-        'billing_checkout',
-        'billing_portal',
-        'logout'
-    }
-    if request.endpoint in subscription_exempt:
+    g.journal_owner = is_journal_owner(user)
+    if request.endpoint in OWNER_ENDPOINTS:
+        if not g.journal_owner:
+            abort(403)
+        if request.endpoint in {'restore_backup', 'upload_db'}:
+            abort(403)  # An account database replacement could reassign workspace IDs.
         return
-    user = get_user_by_id(session.get('user_id'))
-    user = dict(user) if user else None
-    if not _is_subscription_active(user):
+    if request.endpoint in {'billing', 'billing_checkout', 'billing_portal', 'logout'}:
+        return
+    if not g.journal_owner and not _is_subscription_active(dict(user)):
         return redirect(url_for('billing'))
+
+    if not g.journal_owner:
+        # A single authenticated legacy account may keep using the original journal.
+        if not OWNER_USERNAME:
+            if get_user_count() != 1:
+                abort(503)
+            return
+        workspace = use_workspace(user['id'])
+        workspace.__enter__()
+        g.journal_context = workspace
+
+
+@app.teardown_request
+def release_workspace(error):
+    workspace = g.pop('journal_context', None)
+    if workspace is not None:
+        workspace.__exit__(None, None, None)
+
+
+@app.cli.command('create-journal-user')
+@click.argument('username')
+@click.password_option()
+def create_journal_user(username, password):
+    """Provision a private journal account with a 14-day trial."""
+    if not OWNER_USERNAME or not get_user_by_username(OWNER_USERNAME):
+        raise click.ClickException('Configure JOURNAL_OWNER_USERNAME for the existing owner first.')
+    username = username.strip()
+    if not username or len(username) > 100 or len(password) < 12:
+        raise click.ClickException('Enter a username and a password of at least 12 characters.')
+    try:
+        create_user(
+            username, generate_password_hash(password),
+            trial_ends_at=(datetime.utcnow() + timedelta(days=14)).isoformat(),
+        )
+    except IntegrityError:
+        raise click.ClickException('That username already exists.') from None
+    click.echo(f'Created journal account {username}.')
+
+
+def admin_workspace(user):
+    return nullcontext() if is_journal_owner(user) else use_workspace(user['id'])
+
+
+@app.get('/admin/journals')
+def admin_journals():
+    with closing(get_db(accounts=True)) as conn:
+        users = conn.execute('SELECT id, username FROM users ORDER BY username').fetchall()
+    user_id = request.args.get('user', type=int)
+    page_id = request.args.get('page', type=int)
+    target = get_user_by_id(user_id) if user_id is not None else None
+    if user_id is not None and target is None:
+        abort(404)
+    pages, page, blocks = [], None, []
+    if target:
+        app.logger.warning('Journal admin view actor=%s account=%s page=%s',
+                           session['user_id'], user_id, page_id)
+        with admin_workspace(target):
+            conn = get_db()
+            try:
+                pages = conn.execute('SELECT id, title, is_deleted FROM pages ORDER BY updated_at DESC, id DESC').fetchall()
+                if page_id is not None:
+                    page = conn.execute('SELECT * FROM pages WHERE id = ?', (page_id,)).fetchone()
+                    if page is None:
+                        abort(404)
+                    blocks = conn.execute('SELECT * FROM blocks WHERE page_id = ? ORDER BY position', (page_id,)).fetchall()
+            finally:
+                conn.close()
+    return render_template('admin_journals.html', users=users, target=target, pages=pages, page=page, blocks=blocks)
+
+
+@app.get('/admin/journals/<int:user_id>/attachments/<filename>')
+def admin_attachment(user_id, filename):
+    target = get_user_by_id(user_id)
+    if target is None:
+        abort(404)
+    app.logger.warning('Journal admin attachment actor=%s account=%s', session['user_id'], user_id)
+    with admin_workspace(target):
+        return send_from_directory(uploads_folder(UPLOAD_FOLDER), filename, as_attachment=True)
 
 
 # === ページルート ===
@@ -289,7 +376,9 @@ def healthplanet_page():
 
 @app.route('/uploads/<filename>')
 def download_file(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
+    response = send_from_directory(uploads_folder(UPLOAD_FOLDER), filename)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -300,6 +389,7 @@ def login():
         password = request.form.get('password') or ''
         user = get_user_by_username(username)
         if user and check_password_hash(user['password_hash'], password):
+            session.clear()
             session['user_id'] = user['id']
             session['username'] = user['username']
             return redirect(url_for('index'))
@@ -308,6 +398,8 @@ def login():
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
+    if OWNER_USERNAME and not get_user_count():
+        abort(503)
     if get_user_count() > 0:
         return redirect(url_for('login'))
     if request.method == 'POST':
@@ -319,9 +411,8 @@ def setup():
         if password != password_confirm:
             return render_template('setup.html', error='パスワードが一致しません。')
         password_hash = generate_password_hash(password)
-        user_id = create_user(username, password_hash)
         trial_ends = (datetime.utcnow() + timedelta(days=14)).isoformat()
-        update_user_subscription(user_id, 'trialing', trial_ends)
+        create_user(username, password_hash, trial_ends_at=trial_ends)
         user = get_user_by_username(username)
         session['user_id'] = user['id']
         session['username'] = user['username']
@@ -399,22 +490,33 @@ def tokutei():
     """特定商取引法ページ"""
     return send_from_directory(STATIC_FOLDER, 'tokutei.html')
 
+@app.route('/pricing')
+def pricing():
+    return render_template('pricing.html')
+
 @app.route('/billing')
 def billing():
     user = get_user_by_id(session.get('user_id')) if session.get('user_id') else None
     user = dict(user) if user else None
     status = user['subscription_status'] if user else 'inactive'
-    return render_template('billing.html', status=status)
+    token = session.setdefault('billing_token', secrets.token_urlsafe(32))
+    return render_template('billing.html', status=status, token=token, annual=bool(STRIPE_ANNUAL_PRICE_ID))
 
-@app.route('/billing/checkout')
+@app.route('/billing/checkout', methods=['POST'])
 def billing_checkout():
-    if not STRIPE_SECRET_KEY or not STRIPE_PRICE_ID:
-        return render_template('billing.html', status='inactive', error='Stripe設定が未完了です。')
+    token = session.get('billing_token')
+    if not token or token != request.form.get('token'):
+        return 'Invalid form token', 403
+    price = {'monthly': STRIPE_PRICE_ID, 'annual': STRIPE_ANNUAL_PRICE_ID}.get(request.form.get('plan'))
+    if not AUTH_ENABLED or not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET or not price:
+        return '決済は現在利用できません。', 503
     user = get_user_by_id(session.get('user_id'))
     user = dict(user) if user else None
     if not user:
         return redirect(url_for('login'))
     customer_id = user.get('stripe_customer_id')
+    if customer_id and user.get('subscription_status') in {'active', 'trialing', 'past_due', 'unpaid', 'incomplete', 'paused'}:
+        return redirect(url_for('billing_portal'))
     if not customer_id:
         customer = stripe.Customer.create()
         customer_id = customer['id']
@@ -422,7 +524,7 @@ def billing_checkout():
     session_obj = stripe.checkout.Session.create(
         mode='subscription',
         customer=customer_id,
-        line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
+        line_items=[{'price': price, 'quantity': 1}],
         success_url=STRIPE_SUCCESS_URL,
         cancel_url=STRIPE_CANCEL_URL
     )
@@ -447,39 +549,25 @@ def stripe_webhook():
     payload = request.data
     sig_header = request.headers.get('Stripe-Signature')
     
-    # Try to verify the signature, but be lenient in development
+    if not STRIPE_WEBHOOK_SECRET:
+        return jsonify({'error': 'Webhook not configured'}), 503
+    if not sig_header:
+        return jsonify({'error': 'Missing signature'}), 400
     try:
-        if STRIPE_WEBHOOK_SECRET:
-            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
-        else:
-            # No secret set - use raw JSON (development mode)
-            event = request.get_json() or {}
-    except stripe.error.SignatureVerificationError as e:
-        # Signature verification failed - for development, log and try to parse anyway
-        # In development mode, try to parse the payload anyway
-        import json
-        try:
-            event = json.loads(payload)
-        except:
-            return jsonify({'error': 'Invalid JSON payload'}), 400
-    except Exception as e:
-        return jsonify({'error': 'Webhook processing error'}), 400
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        return jsonify({'error': 'Invalid webhook'}), 400
 
-    # Process the event
     event_type = event.get('type')
     data = event.get('data', {}).get('object', {})
-
-    if event_type in ['checkout.session.completed']:
-        customer_id = data.get('customer')
-        if customer_id:
-            user = get_user_by_stripe_customer(customer_id)
-            if user:
-                update_user_subscription(user['id'], 'active', None)
 
     if event_type in ['customer.subscription.updated', 'customer.subscription.created']:
         customer_id = data.get('customer')
         status = data.get('status')
-        period_end = data.get('current_period_end')
+        period_end = data.get('trial_end') if status == 'trialing' else data.get('current_period_end')
+        if not period_end and status == 'active':
+            periods = [item['current_period_end'] for item in data.get('items', {}).get('data', []) if item.get('current_period_end')]
+            period_end = min(periods, default=None)
         ends_at = datetime.utcfromtimestamp(period_end).isoformat() if period_end else None
         if customer_id:
             user = get_user_by_stripe_customer(customer_id)
